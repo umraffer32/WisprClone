@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+*.log
+wispr_flow_history.txt
+corrections.txt

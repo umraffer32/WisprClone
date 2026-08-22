@@ -1,0 +1,34 @@
+# WisprClone settings. Restart the app (tray > Quit, relaunch) after editing.
+
+[hotkeys]
+ptt = "x2"            # "x1", "x2", or a keyboard key name (pynput), e.g. "f9"
+                      # the button is captured exclusively while the app runs
+toggle_key = "ctrl_r"
+toggle_max_tap_ms = 500
+debounce_ms = 300
+
+[audio]
+duck = true           # lower other apps' volume while recording
+duck_factor = 0.05    # they play at 5% while the mic is hot
+idle_close_s = 10     # release the mic (and its tray icon) this many seconds
+                      # after the last dictation. 0 = always hot
+preroll_ms = 250
+min_recording_s = 0.3
+max_recording_s = 300
+blocksize = 512
+
+[model]
+name = "large-v3-turbo"   # alternatives: "large-v3" (best ears, ~1s), "distil-large-v3" (fastest)
+device = "auto"           # "auto" (CUDA then CPU), "cuda", "cpu"
+compute_type = "float16"  # "int8_float16" halves VRAM
+gpu_fail_latch = 3
+
+[paste]
+restore_delay_ms = 300
+clipboard_retries = 5
+clipboard_retry_ms = 20
+result_display_s = 5   # how long the pill offers a click-to-repaste checkmark
+
+[files]
+corrections = "corrections.txt"
+history = "history.log"
