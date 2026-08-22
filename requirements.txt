@@ -7,6 +7,7 @@ pynput==1.8.2
 pystray==0.19.5
 Pillow==12.3.0
 pywin32==311
+requests==2.34.2
 nvidia-cublas-cu12==12.9.2.10
 nvidia-cudnn-cu12==9.24.0.43
 pycaw==20240210
