@@ -2,7 +2,7 @@
 
 A local push-to-talk dictation tool for Windows, built as a lighter, private alternative to Wispr Flow. Hold a button, speak, release, and the transcription pastes into whatever's focused. Everything runs on-device: no account, no cloud API, no audio ever leaves the machine.
 
-I built it because Wispr Flow does the job well but sends every word I say to a server I don't control. This does the same job locally, with a model I chose and can swap out, and nothing leaves my machine.
+I built it after hitting Wispr Flow's free-tier limit and deciding a monthly subscription wasn't worth it for what's fundamentally speech-to-text with autopaste. This does the same job locally, with a model I chose and can swap out, and as a side effect nothing I say leaves the machine.
 
 ## What it does
 
