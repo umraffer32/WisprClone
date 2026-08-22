@@ -70,6 +70,21 @@ def caret_visible():
     return False
 
 
+_TERMINAL_CLASSES = {"CASCADIA_HOSTING_WINDOW_CLASS",  # Windows Terminal
+                     "ConsoleWindowClass"}             # conhost/cmd
+
+
+def is_terminal():
+    """Windows Terminal and conhost draw their own cursor and expose the
+    buffer as a Document/Pane to UI Automation, so caret_visible() and
+    focused_editable() both read False here even though a Ctrl+V into a
+    console always lands at the input line - no read-only case to miss,
+    unlike a webpage."""
+    buf = ctypes.create_unicode_buffer(256)
+    ctypes.windll.user32.GetClassNameW(ctypes.windll.user32.GetForegroundWindow(), buf, 256)
+    return buf.value in _TERMINAL_CLASSES
+
+
 _uia = None
 
 
@@ -372,7 +387,7 @@ class Transcriber(threading.Thread):
                 self.last_paste_ts = time.monotonic()
 
                 # offer click-to-repaste only when the paste probably missed
-                if not (caret_visible() or focused_editable()):
+                if not (caret_visible() or focused_editable() or is_terminal()):
                     self.status.result_until = time.monotonic() + self.result_display_s
             except Exception:
                 log.exception("transcription job failed")
