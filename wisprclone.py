@@ -136,7 +136,14 @@ def main():
     status.quit_requested = False
     jobs = queue.Queue()
     recorder = Recorder(cfg, jobs, status)
-    recorder.open()
+    try:
+        recorder.open()
+    except Exception:
+        # e.g. launched at login before a USB mic/dock has enumerated yet.
+        # Don't let this kill the app before the tray icon even exists -
+        # the stale-stream watchdog in tick() retries a few seconds in.
+        log.exception("mic open failed at startup")
+        status.mic_ok = False
     ducker = None
     if cfg["audio"]["duck"]:
         ducker = Ducker(cfg["audio"]["duck_factor"])
