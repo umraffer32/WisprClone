@@ -57,6 +57,11 @@ _YOU_KNOW = re.compile(r",\s*you know\s*,?|(?<![\w-])you know\s*,", re.IGNORECAS
 # "the box"). Keeps the first occurrence's own casing via the backreference.
 # Trade-off: also collapses deliberate repetition ("no, no, no!" -> "no!").
 _STUTTER = re.compile(r"\b(\w+)(?:[,\s]+\1\b)+", re.IGNORECASE)
+# Drops a leading "and" that starts a sentence ("And I went" -> "I went"),
+# keeping whatever anchored the match (start of text, or ". ") so the next
+# word still gets capitalized below. "and" mid-sentence is left alone - it's
+# only the sentence-opening filler use that reads wrong in dictated text.
+_LEADING_AND = re.compile(r"(^|[.!?]\s+)and\b,?\s*", re.IGNORECASE)
 _SENTENCE_START = re.compile(r"(^|[.!?]\s+)([a-z])")
 _HISTORY_LINE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}\] (.*)$")
 
@@ -168,6 +173,7 @@ def clean_text(text, corrections_path):
     text = _STUTTER.sub(r"\1", text)
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"\s+([.,!?;])", r"\1", text)
+    text = _LEADING_AND.sub(lambda m: m.group(1), text)
     text = _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
     # corrections.txt is re-read each job so edits apply without a restart
     try:
