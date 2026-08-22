@@ -149,8 +149,12 @@ def clean_text(text, corrections_path):
             if not line or line.startswith("#") or "=" not in line:
                 continue
             wrong, right = line.split("=", 1)
-            text = re.sub(rf"\b{re.escape(wrong.strip())}\b", right.strip(),
-                          text, flags=re.IGNORECASE)
+            replacement = right.strip()
+            # lambda repl: right-hand side is literal text, never a regex
+            # backreference template (a bare "\1" or "\t" would otherwise
+            # corrupt output or raise re.error and break every dictation)
+            text = re.sub(rf"\b{re.escape(wrong.strip())}\b",
+                          lambda m: replacement, text, flags=re.IGNORECASE)
     except OSError:
         pass
     # Whisper itself puts a period on short fragments ("Outdoor camping."),
