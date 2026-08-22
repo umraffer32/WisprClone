@@ -18,7 +18,7 @@ max_recording_s = 300
 blocksize = 512
 
 [model]
-name = "large-v3-turbo"   # alternatives: "large-v3" (best ears, ~1s), "distil-large-v3" (fastest)
+name = "distil-large-v3"  # alternatives: "large-v3" (best ears, ~1s), "large-v3-turbo" (multilingual)
 device = "auto"           # "auto" (CUDA then CPU), "cuda", "cpu"
 compute_type = "float16"  # "int8_float16" halves VRAM
 gpu_fail_latch = 3
