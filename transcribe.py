@@ -47,6 +47,16 @@ _SAFE_FORMATS = _TEXT_FORMATS | _IMAGE_FORMATS
 # because of the filler pause, so they go with it ("should, uh, remove" ->
 # "should remove").
 _FILLER = re.compile(r",?\s*(?<![\w-])(?:um+|uh+|erm|hmm+)(?![\w-]),?\s*", re.IGNORECASE)
+# Unlike um/uh, "you know" is also a real phrase ("do you know..."), so it's
+# only stripped when a comma marks it as the spoken pause ("the store, you
+# know, and milk" -> "the store and milk"). Bare "you know" with no comma on
+# either side is left alone - misses some filler uses, but a false strip
+# ("do you know" -> "do") is worse than a miss.
+_YOU_KNOW = re.compile(r",\s*you know\s*,?|(?<![\w-])you know\s*,", re.IGNORECASE)
+# Collapses an immediate stutter ("I I think", "the, the box" -> "I think",
+# "the box"). Keeps the first occurrence's own casing via the backreference.
+# Trade-off: also collapses deliberate repetition ("no, no, no!" -> "no!").
+_STUTTER = re.compile(r"\b(\w+)(?:[,\s]+\1\b)+", re.IGNORECASE)
 _SENTENCE_START = re.compile(r"(^|[.!?]\s+)([a-z])")
 _HISTORY_LINE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}\] (.*)$")
 
@@ -154,6 +164,8 @@ class Status:
 
 def clean_text(text, corrections_path):
     text = _FILLER.sub(" ", text)  # single space, collapsed below
+    text = _YOU_KNOW.sub(" ", text)
+    text = _STUTTER.sub(r"\1", text)
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"\s+([.,!?;])", r"\1", text)
     text = _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
