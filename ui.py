@@ -234,6 +234,10 @@ def make_tray(base_dir, cfg, status, clipboard, recorder):
         status.quit_requested = True
 
     menu = pystray.Menu(
+        pystray.MenuItem(lambda item: f"Words today: {status.words_today}",
+                         None, enabled=False),
+        pystray.MenuItem(lambda item: f"Total words: {status.words_total}",
+                         None, enabled=False),
         pystray.MenuItem("Re-copy last transcription", recopy_last),
         pystray.MenuItem("View history",
                          lambda i, m: os.startfile(base_dir / cfg["files"]["history"])),

@@ -330,6 +330,8 @@ def main():
             tooltip = f"WisprClone — {status.error}"
         elif not status.mic_ok:
             tooltip = "WisprClone — mic unavailable"
+        else:
+            tooltip += f" — {status.words_today} words today"
         if tray.title != tooltip:
             tray.title = tooltip
 

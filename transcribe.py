@@ -48,6 +48,7 @@ _SAFE_FORMATS = _TEXT_FORMATS | _IMAGE_FORMATS
 # "should remove").
 _FILLER = re.compile(r",?\s*(?<![\w-])(?:um+|uh+|erm|hmm+)(?![\w-]),?\s*", re.IGNORECASE)
 _SENTENCE_START = re.compile(r"(^|[.!?]\s+)([a-z])")
+_HISTORY_LINE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}\] (.*)$")
 
 
 class _GUITHREADINFO(ctypes.Structure):
@@ -109,6 +110,19 @@ class Status:
         self.last_text = ""
         self.flash_error = False  # UI tick consumes this
         self.result_until = 0.0   # pill offers click-to-repaste until then
+        self.words_today = 0
+        self.words_total = 0
+        self._word_day = datetime.now().date()
+
+    def add_words(self, text):
+        with self._lock:
+            today = datetime.now().date()
+            if today != self._word_day:
+                self._word_day = today
+                self.words_today = 0
+            n = len(text.split())
+            self.words_today += n
+            self.words_total += n
 
     def inc_transcribing(self):
         with self._lock:
@@ -239,6 +253,26 @@ class Transcriber(threading.Thread):
         self.last_ended_sentence = True
         self.last_paste_ts = 0.0
 
+    def _load_word_counts(self):
+        """Word counters live in Status but must survive a restart, so seed
+        them from history.log rather than starting at zero every launch."""
+        today = datetime.now().date().isoformat()
+        total = today_words = 0
+        try:
+            with open(self.history, encoding="utf-8") as f:
+                for line in f:
+                    m = _HISTORY_LINE.match(line)
+                    if not m:
+                        continue
+                    n = len(m.group(2).split())
+                    total += n
+                    if m.group(1) == today:
+                        today_words += n
+        except OSError:
+            pass
+        self.status.words_total = total
+        self.status.words_today = today_words
+
     def _load(self, device):
         m = WhisperModel(self.cfg["name"], device=device,
                          compute_type=self.cfg["compute_type"] if device == "cuda" else "int8",
@@ -284,6 +318,7 @@ class Transcriber(threading.Thread):
         return list(segs)
 
     def run(self):
+        self._load_word_counts()
         try:
             self._load_models()
         except Exception:
@@ -308,6 +343,7 @@ class Transcriber(threading.Thread):
                 if not text:
                     continue  # silence/hallucination: paste nothing
                 self.status.last_text = text
+                self.status.add_words(text)
                 with open(self.history, "a", encoding="utf-8") as f:
                     f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {text}\n")
 
