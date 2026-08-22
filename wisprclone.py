@@ -79,7 +79,7 @@ class StateMachine:
         with self.lock:
             if self.state == IDLE:
                 self.state = RECORDING_PTT
-                self.recorder.start_recording(mode="ptt")
+                self.recorder.start_recording()
 
     def ptt_release(self):
         with self.lock:
@@ -96,7 +96,7 @@ class StateMachine:
             self.last_tap = now
             if self.state == IDLE:
                 self.state = RECORDING_TOGGLE
-                self.recorder.start_recording(mode="toggle")
+                self.recorder.start_recording()
             elif self.state == RECORDING_TOGGLE:
                 too_short = self.recorder.recording_seconds < self.min_s
                 self.recorder.stop_recording(discard=too_short)

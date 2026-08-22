@@ -23,17 +23,9 @@ for _sub in ("cublas", "cudnn"):
 
 import numpy as np
 import pywintypes
-import requests
 import win32clipboard
 from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key
-
-POLISH_PROMPT = (
-    "Clean up this dictated speech: remove filler words and false starts, "
-    "fix grammar, keep every idea and the speaker's own words where "
-    "possible, and add nothing. Output only the cleaned text - no preamble, "
-    "no quotes, no explanation.\n\nText: "
-)
 
 log = logging.getLogger("wisprclone")
 
@@ -240,7 +232,6 @@ class Transcriber(threading.Thread):
         self.gpu_fails = 0
         self.result_display_s = cfg["paste"]["result_display_s"]
         self.continuation_gap_s = cfg["paste"]["continuation_gap_s"]
-        self.polish_cfg = cfg["polish"]
         # sentence-continuity tracking: was the last paste's window and
         # end-punctuation state, so a follow-up dictation can retroactively
         # close an unfinished sentence instead of running the two together
@@ -292,29 +283,6 @@ class Transcriber(threading.Thread):
         segs, _ = self.cpu_model.transcribe(audio, language="en", vad_filter=True)
         return list(segs)
 
-    def _polish(self, text):
-        """LLM cleanup for rambling toggle-mode dictations - false starts,
-        run-on sentences. Any failure (Ollama down, timeout, suspicious
-        output length) falls back to the raw transcript rather than risk
-        losing or corrupting the dictation."""
-        p = self.polish_cfg
-        try:
-            r = requests.post("http://localhost:11434/api/generate", json={
-                "model": p["model"], "stream": False, "keep_alive": "24h",
-                "prompt": POLISH_PROMPT + text,
-                "options": {"temperature": 0},
-            }, timeout=p["timeout_s"])
-            r.raise_for_status()
-            polished = r.json()["response"].strip()
-            ratio = len(polished) / max(1, len(text))
-            if not polished or not (p["min_ratio"] <= ratio <= p["max_ratio"]):
-                log.warning("polish output length suspicious (ratio %.2f), using raw", ratio)
-                return text
-            return polished
-        except Exception:
-            log.exception("polish pass failed, using raw text")
-            return text
-
     def run(self):
         try:
             self._load_models()
@@ -328,30 +296,17 @@ class Transcriber(threading.Thread):
                 self.status.flash_error = True
         self.status.ready = True
         log.info("model ready on %s", self.status.device)
-        if self.polish_cfg["enabled"]:
-            # background: don't delay PTT readiness for a model toggle mode
-            # alone needs. A cold Ollama load is the 3s+ delay a first
-            # dictation would otherwise pay.
-            threading.Thread(target=self._polish, args=("warmup",),
-                             daemon=True).start()
 
         while True:
-            job = self.jobs.get()
-            t0 = time.monotonic()
+            blocks = self.jobs.get()
             try:
-                audio = np.concatenate(job["blocks"])
+                audio = np.concatenate(blocks)
                 segments = self._transcribe(audio)
                 text = " ".join(s.text.strip() for s in segments
                                 if s.no_speech_prob < 0.6)
                 text = clean_text(text, self.corrections)
                 if not text:
                     continue  # silence/hallucination: paste nothing
-                t1 = time.monotonic()
-                if job["mode"] == "toggle" and self.polish_cfg["enabled"]:
-                    text = self._polish(text)
-                t2 = time.monotonic()
-                log.info("job: audio=%.1fs whisper=%.2fs polish=%.2fs mode=%s",
-                         len(audio) / 16000, t1 - t0, t2 - t1, job["mode"])
                 self.status.last_text = text
                 with open(self.history, "a", encoding="utf-8") as f:
                     f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {text}\n")

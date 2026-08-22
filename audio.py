@@ -77,8 +77,6 @@ class Recorder:
         self.last_block_ts = time.monotonic()
         self.want_recording = False
         self.discard_next = False
-        self.mode = "ptt"
-        self._job_mode = "ptt"
         self.rec_start_ts = 0.0
         self._was_recording = False
         self._buffer = []
@@ -95,7 +93,6 @@ class Recorder:
             # button press isn't lost, then stop feeding the deque
             self._buffer = list(self.preroll)
             self.preroll.clear()
-            self._job_mode = self.mode
         if want:
             self._buffer.append(block)
         else:
@@ -105,14 +102,13 @@ class Recorder:
                 # pre-roll alone would nearly satisfy a sample-count minimum.
                 if not self.discard_next:
                     self.status.inc_transcribing()
-                    self.jobs.put({"blocks": self._buffer, "mode": self._job_mode})
+                    self.jobs.put(self._buffer)
                 self._buffer = []
                 self.discard_next = False
             self.preroll.append(block)
         self._was_recording = want
 
-    def start_recording(self, mode="ptt"):
-        self.mode = mode  # set before the flag; the callback reads both together
+    def start_recording(self):
         self.rec_start_ts = time.monotonic()
         self.want_recording = True
 
@@ -207,8 +203,8 @@ if __name__ == "__main__":
     time.sleep(0.2)  # let the callback hand the buffer off
     rec.close()
     print()
-    job = jobs.get_nowait()
-    audio = np.concatenate(job["blocks"])
+    blocks = jobs.get_nowait()
+    audio = np.concatenate(blocks)
     with wave.open("test.wav", "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)

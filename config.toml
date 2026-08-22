@@ -34,13 +34,6 @@ continuation_gap_s = 0  # if the last dictation ended without a period and you
                        # 0 = disabled: false-positives on unrelated messages
                        # in chat-style use outweighed the benefit
 
-[polish]
-enabled = false         # LLM cleanup for toggle-mode (long-form) dictations only
-model = "llama3.2:3b"   # served locally by Ollama at localhost:11434
-timeout_s = 10
-min_ratio = 0.4         # reject the polish result outside [min_ratio, max_ratio]
-max_ratio = 2.5         # of the original length - likely means the model misbehaved
-
 [files]
 corrections = "corrections.txt"
 history = "history.log"
