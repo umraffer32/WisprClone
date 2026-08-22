@@ -61,8 +61,11 @@ class Pill:
         self.visible = False
         self.flash_until = 0
         self._dismiss_box = None  # (x0, y0, x1, y1) hit-box, result state only
+        self._check_box = None
         self._x_hover = False
         self._x_dismissing = False  # click-flash in progress, then hide
+        self._check_hover = False
+        self._check_flashing = False  # click-flash in progress, then repaste
         root.withdraw()
 
     def _resize(self, w):
@@ -73,32 +76,45 @@ class Pill:
         self.root.geometry(f"{w}x{_H}+{x}+{self._y}")
         self.canvas.config(width=w)
 
-    def _in_dismiss_box(self, x, y):
-        box = self._dismiss_box
+    @staticmethod
+    def _in_box(x, y, box):
         return bool(box) and box[0] <= x <= box[2] and box[1] <= y <= box[3]
 
     def _motion(self, event):
-        if self.state == "result" and not self._x_dismissing:
-            self._x_hover = self._in_dismiss_box(event.x, event.y)
+        if self.state != "result":
+            return
+        if not self._x_dismissing:
+            self._x_hover = self._in_box(event.x, event.y, self._dismiss_box)
+        if not self._check_flashing:
+            self._check_hover = self._in_box(event.x, event.y, self._check_box)
 
     def _leave(self, event):
         self._x_hover = False
+        self._check_hover = False
 
     def _clicked(self, event):
         if self.state != "result":
             return
-        if self._in_dismiss_box(event.x, event.y):
+        if self._in_box(event.x, event.y, self._dismiss_box):
             if not self._x_dismissing:
                 self._x_dismissing = True
                 self.root.after(120, self._finish_dismiss)
         elif self.on_result_click:
-            self.on_result_click()
+            if not self._check_flashing:
+                self._check_flashing = True
+                self.root.after(120, self._finish_repaste)
 
     def _finish_dismiss(self):
         self._x_dismissing = False
         self._x_hover = False
         if self.on_dismiss:
             self.on_dismiss()
+
+    def _finish_repaste(self):
+        self._check_flashing = False
+        self._check_hover = False
+        if self.on_result_click:
+            self.on_result_click()
 
     def _apply_noactivate(self):
         # Tk resets ex-styles on remap, so this runs after every deiconify.
@@ -122,6 +138,8 @@ class Pill:
         self.levels.extend([0.0] * _NBARS)
         self._x_hover = False
         self._x_dismissing = False
+        self._check_hover = False
+        self._check_flashing = False
 
     def _draw_base(self, fill):
         c = self.canvas
@@ -142,6 +160,7 @@ class Pill:
         self._draw_base(_ERR if state == "error" else _BG)
         c = self.canvas
         self._dismiss_box = None
+        self._check_box = None
         if state == "recording":
             self.levels.append(min(1.0, level * 12))
             bw = (self._w - 2 * _RADIUS) / _NBARS
@@ -159,8 +178,17 @@ class Pill:
             # an X to dismiss early instead of waiting out the countdown.
             m = _H / 2
             cx = 30
+            if self._check_flashing:
+                c.create_oval(cx - 12, m - 12, cx + 12, m + 12, fill=_BAR, outline="")
+                check_fill = "#ffffff"
+            elif self._check_hover:
+                c.create_oval(cx - 12, m - 12, cx + 12, m + 12, fill="#3a3a46", outline="")
+                check_fill = "#5fe08a"
+            else:
+                check_fill = _BAR
             c.create_line(cx - 8, m, cx - 2, m + 5, cx + 8, m - 6,
-                          fill=_BAR, width=3, capstyle=tk.ROUND, joinstyle=tk.ROUND)
+                          fill=check_fill, width=3, capstyle=tk.ROUND, joinstyle=tk.ROUND)
+            self._check_box = (cx - 12, m - 12, cx + 12, m + 12)
             c.create_text(58, m, text=str(max(1, math.ceil(level))),
                           fill="#aaaaaa", font=("Segoe UI", 9))
             xx = self._w - _RADIUS - 8
