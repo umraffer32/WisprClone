@@ -252,6 +252,7 @@ def main():
     was_recording = False
     idle_close_s = cfg["audio"]["idle_close_s"]
     last_activity = time.monotonic()
+    last_menu_update = 0.0
 
     def input_desktop_ours():
         # Fails while the secure desktop (UAC) or lock screen holds input —
@@ -263,7 +264,7 @@ def main():
         return False
 
     def tick():
-        nonlocal mic_recovery_tried, was_recording
+        nonlocal mic_recovery_tried, was_recording, last_menu_update
         if status.quit_requested:
             teardown()
             return
@@ -341,6 +342,17 @@ def main():
             tooltip += f" — {status.words_today} words today"
         if tray.title != tooltip:
             tray.title = tooltip
+
+        # pystray's Win32 backend caches the native menu text, so the
+        # word-count entries (built from lambdas) never refresh on their
+        # own - unlike tray.title, which does. update_menu() rebuilds it;
+        # throttled since it's a real Win32 call, not just a state check.
+        if time.monotonic() - last_menu_update > 1.0:
+            last_menu_update = time.monotonic()
+            try:
+                tray.update_menu()
+            except Exception:
+                log.exception("tray menu refresh failed")
 
         root.after(33, tick)
 
