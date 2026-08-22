@@ -347,7 +347,11 @@ def main():
         # word-count entries (built from lambdas) never refresh on their
         # own - unlike tray.title, which does. update_menu() rebuilds it;
         # throttled since it's a real Win32 call, not just a state check.
-        if time.monotonic() - last_menu_update > 1.0:
+        # Skipped while the menu is actually open - update_menu() destroys
+        # the live hmenu, which kills hover highlighting for the rest of
+        # that popup if it happens mid-click (see ui._fix_menu_hover).
+        if (time.monotonic() - last_menu_update > 1.0
+                and not getattr(tray, "_menu_open", False)):
             last_menu_update = time.monotonic()
             try:
                 tray.update_menu()

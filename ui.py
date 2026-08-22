@@ -2,6 +2,7 @@
 
 import collections
 import ctypes
+import ctypes.wintypes as wt
 import logging
 import math
 import os
@@ -219,6 +220,46 @@ def _icon_image():
     return img
 
 
+def _fix_menu_hover(icon):
+    """pystray 0.19.5's Win32 backend calls SetForegroundWindow on the tray
+    icon's message window before showing the popup menu, but TrackPopupMenuEx
+    is given a *different* hidden window as owner (_menu_hwnd) - that mismatch
+    is why hovering over menu items shows no highlight (right-clicking the
+    desktop highlights fine, so it isn't a Windows theme setting). Same
+    right-click handling as pystray's Icon._on_notify, just foregrounding the
+    window that actually owns the popup.
+
+    Also tracks icon._menu_open: _update_menu() destroys and rebuilds the
+    live hmenu, which if it happens while TrackPopupMenuEx is still tracking
+    that same handle (i.e. the menu is open) kills hover highlighting stone
+    dead for the rest of that popup - the tick loop checks this flag before
+    calling update_menu() to avoid stepping on an open menu."""
+    from pystray._util import win32
+
+    icon._menu_open = False
+
+    def on_notify(wparam, lparam):
+        if lparam == win32.WM_LBUTTONUP:
+            icon()
+        elif icon._menu_handle and lparam == win32.WM_RBUTTONUP:
+            win32.SetForegroundWindow(icon._menu_hwnd)
+            point = wt.POINT()
+            win32.GetCursorPos(ctypes.byref(point))
+            hmenu, descriptors = icon._menu_handle
+            icon._menu_open = True
+            try:
+                index = win32.TrackPopupMenuEx(
+                    hmenu,
+                    win32.TPM_RIGHTALIGN | win32.TPM_BOTTOMALIGN | win32.TPM_RETURNCMD,
+                    point.x, point.y, icon._menu_hwnd, None)
+            finally:
+                icon._menu_open = False
+            if index > 0:
+                descriptors[index - 1](icon)
+
+    icon._message_handlers[win32.WM_NOTIFY] = on_notify
+
+
 def make_tray(base_dir, cfg, status, clipboard, recorder):
     def recopy_last(icon, item):
         if status.last_text:
@@ -246,7 +287,9 @@ def make_tray(base_dir, cfg, status, clipboard, recorder):
         pystray.MenuItem("Reconnect mic", reconnect_mic),
         pystray.MenuItem("Quit", quit_app),
     )
-    return pystray.Icon("WisprClone", _icon_image(), "WisprClone", menu)
+    icon = pystray.Icon("WisprClone", _icon_image(), "WisprClone", menu)
+    _fix_menu_hover(icon)
+    return icon
 
 
 if __name__ == "__main__":
