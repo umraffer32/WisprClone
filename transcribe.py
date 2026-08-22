@@ -239,7 +239,14 @@ class Transcriber(threading.Thread):
         self.cpu_model = None
         self.gpu_fails = 0
         self.result_display_s = cfg["paste"]["result_display_s"]
+        self.continuation_gap_s = cfg["paste"]["continuation_gap_s"]
         self.polish_cfg = cfg["polish"]
+        # sentence-continuity tracking: was the last paste's window and
+        # end-punctuation state, so a follow-up dictation can retroactively
+        # close an unfinished sentence instead of running the two together
+        self.last_hwnd = None
+        self.last_ended_sentence = True
+        self.last_paste_ts = 0.0
 
     def _load(self, device):
         m = WhisperModel(self.cfg["name"], device=device,
@@ -348,8 +355,27 @@ class Transcriber(threading.Thread):
                 self.status.last_text = text
                 with open(self.history, "a", encoding="utf-8") as f:
                     f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {text}\n")
-                # trailing space so consecutive dictations don't run together
-                self.clipboard.paste(text + " ")
+
+                # Bridge to whatever's already there: same window, recent,
+                # and the last dictation had no closing punctuation -> stitch
+                # a period on instead of running the two sentences together.
+                # Any other case (different window, timed out, or the last
+                # one already ended properly) just gets a plain space - safe
+                # default that can never glue two dictations together.
+                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                if (hwnd == self.last_hwnd and not self.last_ended_sentence
+                        and time.monotonic() - self.last_paste_ts < self.continuation_gap_s):
+                    joined = ". " + text
+                elif self.last_hwnd is None:
+                    joined = text  # very first dictation - nothing to bridge from
+                else:
+                    joined = " " + text
+
+                self.clipboard.paste(joined)
+                self.last_hwnd = hwnd
+                self.last_ended_sentence = text[-1] in ".!?"
+                self.last_paste_ts = time.monotonic()
+
                 # offer click-to-repaste only when the paste probably missed
                 if not (caret_visible() or focused_editable()):
                     self.status.result_until = time.monotonic() + self.result_display_s

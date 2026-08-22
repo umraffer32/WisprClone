@@ -28,6 +28,9 @@ restore_delay_ms = 300
 clipboard_retries = 5
 clipboard_retry_ms = 20
 result_display_s = 5   # how long the pill offers a click-to-repaste checkmark
+continuation_gap_s = 60 # if the last dictation ended without a period and you
+                       # dictate again within this long, in the same window,
+                       # a period is stitched on before the new sentence
 
 [polish]
 enabled = true          # LLM cleanup for toggle-mode (long-form) dictations only

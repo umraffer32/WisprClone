@@ -227,9 +227,10 @@ def main():
     def repaste_last():
         status.result_until = 0.0  # click registered: hide the offer
         if status.last_text:
-            # off the tk thread - paste() sleeps through the restore delay
+            # manual re-aim: don't presume where this lands, just avoid
+            # gluing onto whatever's already there
             threading.Thread(target=clipboard.paste,
-                             args=(status.last_text + " ",), daemon=True).start()
+                             args=(" " + status.last_text,), daemon=True).start()
 
     pill = Pill(root, on_result_click=repaste_last)
     tray = make_tray(BASE, cfg, status, clipboard, recorder)
