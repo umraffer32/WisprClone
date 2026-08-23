@@ -39,6 +39,10 @@ Diff-level detail lives in git history.
   list in config.toml now biases Whisper toward the words it used to mishear.
   Verified live: Xeon, Ollama, SOQ, ClaudeMD all clean on first transcription
   with no corrections firing. Watch for hotword insertion (over-biasing).
+- Slimmed the recording pill 25% (76px -> 57px, bars 16 -> 10 to keep their
+  spacing) after it sat over the Claude Code status bar text. Compared against
+  the real Wispr Flow first: its bar fully blocks text underneath, so the
+  clone's translucent pill just needed to be smaller, not moved.
 - Separately diagnosed why the app stopped auto-starting at boot: Windows
   silently skips Startup-folder shortcuts whose target has the RUNASADMIN
   flag. Replaced the shortcut with a Task Scheduler task (RunLevel Highest).

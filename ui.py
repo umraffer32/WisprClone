@@ -18,9 +18,9 @@ _BG = "#1e1e28"
 _BAR = "#34c759"
 _ERR = "#c04040"
 _ALPHA = 0.65     # whole-pill translucency, Wispr-style (lower = more see-through)
-_W, _H, _RADIUS = 76, 28, 14
+_W, _H, _RADIUS = 57, 28, 14
 _W_RESULT = 108  # wider: room for the checkmark, countdown, and dismiss X
-_NBARS = 16
+_NBARS = 10
 
 GWL_EXSTYLE = -20
 WS_EX_NOACTIVATE = 0x08000000
