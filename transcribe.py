@@ -268,6 +268,20 @@ class Clipboard:
                 win32clipboard.CloseClipboard()
 
 
+def normalize(audio, target_peak):
+    """Boosts a quiet recording (e.g. a mic several feet away) toward
+    target_peak before transcription. Skips near-silence so the noise floor
+    doesn't get amplified into something Whisper mistakes for speech, and
+    caps the gain so a single loud pop doesn't leave the rest under-boosted."""
+    if not target_peak:
+        return audio
+    peak = np.max(np.abs(audio))
+    if peak < 1e-4:
+        return audio
+    gain = min(target_peak / peak, 10.0)
+    return audio * gain
+
+
 class Transcriber(threading.Thread):
     def __init__(self, cfg, base_dir, jobs, status):
         super().__init__(daemon=True, name="transcriber")
@@ -283,6 +297,7 @@ class Transcriber(threading.Thread):
         self.gpu_fails = 0
         self.result_display_s = cfg["paste"]["result_display_s"]
         self.continuation_gap_s = cfg["paste"]["continuation_gap_s"]
+        self.normalize_peak = cfg["audio"]["normalize_peak"]
         # sentence-continuity tracking: was the last paste's window and
         # end-punctuation state, so a follow-up dictation can retroactively
         # close an unfinished sentence instead of running the two together
@@ -373,6 +388,7 @@ class Transcriber(threading.Thread):
             blocks = self.jobs.get()
             try:
                 audio = np.concatenate(blocks)
+                audio = normalize(audio, self.normalize_peak)
                 segments = self._transcribe(audio)
                 text = " ".join(s.text.strip() for s in segments
                                 if s.no_speech_prob < 0.6)
