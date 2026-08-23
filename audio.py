@@ -113,6 +113,8 @@ class Recorder:
 
     def start_recording(self, mode="ptt"):
         self.mode = mode  # set before the flag; the callback reads both together
+        self.discard_next = False  # a discard whose falling edge got merged
+                                   # away must not eat this recording
         self.rec_start_ts = time.monotonic()
         self.want_recording = True
 
