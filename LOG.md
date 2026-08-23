@@ -39,6 +39,12 @@ Diff-level detail lives in git history.
   list in config.toml now biases Whisper toward the words it used to mishear.
   Verified live: Xeon, Ollama, SOQ, ClaudeMD all clean on first transcription
   with no corrections firing. Watch for hotword insertion (over-biasing).
+- Rewrote pill rendering for smooth edges: PIL draws each frame at 4x and
+  Lanczos-downsamples, pushed via UpdateLayeredWindow with per-pixel alpha.
+  The old tk-canvas + color-key path couldn't antialias (color-key
+  transparency is binary per pixel), which is why the edges looked ragged.
+  Bonus: transparent corners are now click-through, and identical frames
+  skip the redraw. Verified live across all five pill states.
 - Slimmed the recording pill 25% (76px -> 57px, bars 16 -> 10 to keep their
   spacing) after it sat over the Claude Code status bar text. Compared against
   the real Wispr Flow first: its bar fully blocks text underneath, so the
