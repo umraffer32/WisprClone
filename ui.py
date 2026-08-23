@@ -274,6 +274,10 @@ def make_tray(base_dir, cfg, status, clipboard, recorder):
     def quit_app(icon, item):
         status.quit_requested = True
 
+    def restart_app(icon, item):
+        status.restart_requested = True
+        status.quit_requested = True
+
     menu = pystray.Menu(
         pystray.MenuItem(lambda item: f"Words today: {status.words_today}",
                          None, enabled=False),
@@ -285,6 +289,7 @@ def make_tray(base_dir, cfg, status, clipboard, recorder):
         pystray.MenuItem("Open config",
                          lambda i, m: os.startfile(base_dir / "config.toml")),
         pystray.MenuItem("Reconnect mic", reconnect_mic),
+        pystray.MenuItem("Restart", restart_app),
         pystray.MenuItem("Quit", quit_app),
     )
     icon = pystray.Icon("WisprClone", _icon_image(), "WisprClone", menu)

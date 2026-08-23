@@ -134,6 +134,7 @@ def main():
 
     status = Status()
     status.quit_requested = False
+    status.restart_requested = False
     jobs = queue.Queue()
     recorder = Recorder(cfg, jobs, status)
     try:
@@ -361,6 +362,21 @@ def main():
         root.after(33, tick)
 
     def teardown():
+        # A live recording must hand off before the stream closes, and queued
+        # jobs must finish pasting - Restart clicked right after dictating
+        # would otherwise eat the dictation (or die mid-paste with the user's
+        # clipboard clobbered).
+        with sm.lock:
+            stopping = sm.state != IDLE
+            if stopping:
+                recorder.stop_recording(
+                    discard=recorder.recording_seconds < sm.min_s)
+                sm.state = IDLE
+        if stopping:
+            time.sleep(0.1)  # two callback periods for the buffer handoff
+        deadline = time.monotonic() + 10
+        while status.transcribing > 0 and time.monotonic() < deadline:
+            time.sleep(0.1)
         mouse_listener.stop()
         kb_listener.stop()
         recorder.close()
@@ -376,6 +392,20 @@ def main():
     log.info("started (ptt=%s, pid=%d)", cfg["hotkeys"]["ptt"], os.getpid())
     tick()
     root.mainloop()
+
+    if status.restart_requested:
+        import subprocess
+        import win32api
+        win32api.CloseHandle(mutex)  # the new instance checks the mutex at startup
+        launcher = Path(sys.prefix) / "Scripts" / "WisprClone.exe"
+        log.info("restarting via %s", launcher)
+        try:
+            subprocess.Popen([str(launcher), str(BASE / "wisprclone.py")], cwd=BASE)
+        except OSError:
+            # launcher missing (base-python run, rebuilt venv) or elevation
+            # refused - the scheduled task knows how to launch us either way
+            log.exception("direct relaunch failed, delegating to scheduled task")
+            subprocess.run(["schtasks", "/run", "/tn", "WisprClone"], check=False)
 
 
 def run_echo(cfg):
