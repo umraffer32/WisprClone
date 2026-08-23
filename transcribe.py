@@ -29,13 +29,38 @@ from faster_whisper import WhisperModel
 from pynput.keyboard import Controller, Key
 
 POLISH_PROMPT = (
-    "Clean up this dictated speech: remove filler words and false starts, "
-    "fix grammar, keep every idea and the speaker's own words where "
-    "possible, and add nothing. Output only the cleaned text - no preamble, "
-    "no quotes, no explanation.\n\nText: "
+    "Clean up this dictated speech with minimal, conservative edits:\n"
+    "- Remove filler words (um, uh, you know, like) and immediate word "
+    "stutters.\n"
+    "- Remove a false start only when the speaker immediately restarts the "
+    "same sentence.\n"
+    "- Fix punctuation and obvious grammar slips.\n"
+    "Hard rules:\n"
+    "- Add nothing: never append words the speaker did not say, and never "
+    "answer a question the speaker asked.\n"
+    "- Never drop, merge, or reorder sentences: every sentence of the input "
+    "must appear as a sentence in the output.\n"
+    "- A question must remain a question.\n"
+    "- Keep the speaker's own wording; do not paraphrase, summarize, or "
+    "improve style.\n"
+    "- If unsure about an edit, leave that part unchanged.\n"
+    "Output only the cleaned text - no preamble, no quotes, no "
+    "explanation.\n\nText: "
 )
 
 log = logging.getLogger("wisprclone")
+
+# a machine-wide HTTP_PROXY would reroute the Ollama call (no automatic
+# loopback bypass for 127.0.0.1 on Windows) - never trust proxy env vars
+_ollama = requests.Session()
+_ollama.trust_env = False
+
+# one set of decoder options for both the GPU and CPU-fallback calls, so an
+# anti-hallucination tweak can't land on one path and miss the other.
+# condition_on_previous_text feeds each chunk's text back as context for the
+# next - the mechanism repetition loops and end-of-clip hallucinations feed on
+DECODE_OPTS = dict(language="en", vad_filter=True,
+                   condition_on_previous_text=False)
 
 # Formats we can save and replay byte-for-byte. CF_DIB/CF_DIBV5/PNG cover a
 # copied screenshot's actual image data. A screenshot also litters the
@@ -290,10 +315,28 @@ def normalize(audio, target_peak):
     return audio * gain
 
 
+def trim_trailing_silence(audio, keep_s=0.25):
+    """Drops the quiet tail between the last speech and the stop press.
+    Long trailing silence is what sends Whisper's decoder into repetition
+    loops and phantom-sentence hallucinations at the end of a clip."""
+    peak = np.max(np.abs(audio))
+    if peak < 1e-4:
+        return audio
+    # cap the threshold: one loud transient (mouse-click pop in the pre-roll,
+    # desk bump) must not raise it above quiet distant-mic speech, or the
+    # trim cuts real trailing words
+    thr = min(peak * 0.02, 0.005)
+    above = np.nonzero(np.abs(audio) > thr)[0]
+    end = min(len(audio), above[-1] + int(keep_s * 16000))
+    return audio[:end]
+
+
 class Transcriber(threading.Thread):
     def __init__(self, cfg, base_dir, jobs, status):
         super().__init__(daemon=True, name="transcriber")
         self.cfg = cfg["model"]
+        self.decode_opts = dict(DECODE_OPTS,
+                                hotwords=self.cfg.get("hotwords") or None)
         self.base_dir = base_dir
         self.jobs = jobs
         self.status = status
@@ -363,7 +406,7 @@ class Transcriber(threading.Thread):
     def _transcribe(self, audio):
         try:
             if self.status.device == "cuda":
-                segs, _ = self.model.transcribe(audio, language="en", vad_filter=True)
+                segs, _ = self.model.transcribe(audio, **self.decode_opts)
                 result = list(segs)
                 self.gpu_fails = 0
                 return result
@@ -375,8 +418,20 @@ class Transcriber(threading.Thread):
                 self.status.device = "cpu"
         if self.cpu_model is None:
             self.cpu_model = self._load("cpu")
-        segs, _ = self.cpu_model.transcribe(audio, language="en", vad_filter=True)
+        segs, _ = self.cpu_model.transcribe(audio, **self.decode_opts)
         return list(segs)
+
+    def _warm_polish(self):
+        """Bare model-load request: no prompt, so no generation and none of
+        _polish's guards, and its own generous timeout - a cold load off disk
+        takes far longer than the warm generations timeout_s is sized for."""
+        try:
+            _ollama.post("http://127.0.0.1:11434/api/generate", json={
+                "model": self.polish_cfg["model"], "keep_alive": "24h",
+            }, timeout=120)
+        except Exception as e:
+            log.warning("polish warmup failed (%s); first toggle dictation "
+                        "may be slow or unpolished", e)
 
     def _polish(self, text):
         """LLM cleanup for rambling toggle-mode dictations - false starts,
@@ -385,7 +440,9 @@ class Transcriber(threading.Thread):
         losing or corrupting the dictation."""
         p = self.polish_cfg
         try:
-            r = requests.post("http://localhost:11434/api/generate", json={
+            # 127.0.0.1, NOT localhost: Windows tries IPv6 ::1 first and eats
+            # ~2s falling back to IPv4, where Ollama actually listens
+            r = _ollama.post("http://127.0.0.1:11434/api/generate", json={
                 "model": p["model"], "stream": False, "keep_alive": "24h",
                 "prompt": POLISH_PROMPT + text,
                 "options": {"temperature": 0},
@@ -395,6 +452,10 @@ class Transcriber(threading.Thread):
             ratio = len(polished) / max(1, len(text))
             if not polished or not (p["min_ratio"] <= ratio <= p["max_ratio"]):
                 log.warning("polish output length suspicious (ratio %.2f), using raw", ratio)
+                return text
+            if polished.count("?") < text.count("?"):
+                # a dropped short question passes the ratio guard easily
+                log.warning("polish dropped a question, using raw")
                 return text
             return polished
         except Exception:
@@ -419,14 +480,14 @@ class Transcriber(threading.Thread):
             # background: don't delay PTT readiness for a model toggle mode
             # alone needs. A cold Ollama load is the 3s+ delay a first
             # dictation would otherwise pay.
-            threading.Thread(target=self._polish, args=("warmup",),
-                             daemon=True).start()
+            threading.Thread(target=self._warm_polish, daemon=True).start()
 
         while True:
             job = self.jobs.get()
             t0 = time.monotonic()
             try:
                 audio = np.concatenate(job["blocks"])
+                audio = trim_trailing_silence(audio)
                 audio = normalize(audio, self.normalize_peak)
                 segments = self._transcribe(audio)
                 text = " ".join(s.text.strip() for s in segments
@@ -436,7 +497,10 @@ class Transcriber(threading.Thread):
                     continue  # silence/hallucination: paste nothing
                 t1 = time.monotonic()
                 if job["mode"] == "toggle" and self.polish_cfg["enabled"]:
+                    raw = text
                     text = self._polish(text)
+                    if text != raw:
+                        log.info("polish changed text:\n  raw: %s\n  out: %s", raw, text)
                 t2 = time.monotonic()
                 log.info("job: audio=%.1fs whisper=%.2fs polish=%.2fs mode=%s",
                          len(audio) / 16000, t1 - t0, t2 - t1, job["mode"])

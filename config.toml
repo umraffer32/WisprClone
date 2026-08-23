@@ -20,7 +20,11 @@ normalize_peak = 0.7  # boost a quiet/distant-mic recording toward this peak
 blocksize = 512
 
 [model]
-name = "distil-large-v3"  # alternatives: "large-v3" (best ears, ~1s), "large-v3-turbo" (multilingual)
+name = "large-v3-turbo"  # alternatives: "distil-large-v3" (fastest), "large-v3" (best ears)
+hotwords = "WisprClone, Wispr Flow, Claude, ClaudeMD, Fable, Ollama, qwen, Xeon, DDR3, SOQ, SC2, x64"
+                          # personal vocabulary bias, mined from history.log
+                          # (mine_vocab.py); keep short - over-biasing causes
+                          # insertions
 device = "auto"           # "auto" (CUDA then CPU), "cuda", "cpu"
 compute_type = "float16"  # "int8_float16" halves VRAM
 gpu_fail_latch = 3
@@ -37,9 +41,9 @@ continuation_gap_s = 0  # if the last dictation ended without a period and you
                        # in chat-style use outweighed the benefit
 
 [polish]
-enabled = false         # LLM cleanup for toggle-mode (long-form) dictations only
-model = "llama3.2:3b"   # served locally by Ollama at localhost:11434
-timeout_s = 10
+enabled = true          # LLM cleanup for toggle-mode (long-form) dictations only
+model = "qwen2.5:7b-instruct"  # served locally by Ollama at 127.0.0.1:11434
+timeout_s = 8           # real polish runs 1-3s; past this, fall back to raw fast
 min_ratio = 0.4         # reject the polish result outside [min_ratio, max_ratio]
 max_ratio = 2.5         # of the original length - likely means the model misbehaved
 
