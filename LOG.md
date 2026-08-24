@@ -27,6 +27,17 @@ Diff-level detail lives in git history.
   dictation did not, across two separate dictations. One stale pre-fix
   clipboard entry (dictated before the restart picked up the new code)
   showed up once on the first check and was cleared before the clean runs.
+- Decision: Clipboard History stays on going forward - genuinely useful once
+  discovered, and now that it's verified safe against dictations, there's no
+  reason to turn it back off. This was preemptive, not reactive: nothing was
+  leaking before the fix, but leaving history on afterward would have been
+  the actual risk without it.
+- Cloud Clipboard sync's CanUploadToCloudClipboard flag was not live-tested
+  (would need a second device signed into the same Microsoft account). Left
+  unverified deliberately: this machine uses a local account, and Cloud
+  Clipboard sync is gated behind a Microsoft account, so the setting isn't
+  just off, Windows has no account to sync through at all. Revisit only if a
+  Microsoft account is ever added to this machine.
 - Rejected: a hotwords-echo guard (discard a transcript that just echoes the
   hotwords bias list back) - zero occurrences across 719 logged dictations
   against a pipeline that already stacks vad_filter, the no_speech_prob
