@@ -5,6 +5,7 @@ import ctypes.wintypes as wt
 import logging
 import os
 import re
+import struct
 import sys
 import threading
 import time
@@ -75,6 +76,15 @@ _TEXT_FORMATS = {win32clipboard.CF_TEXT, win32clipboard.CF_OEMTEXT,
 _IMAGE_FORMATS = {win32clipboard.CF_DIB, win32clipboard.CF_DIBV5,
                   win32clipboard.RegisterClipboardFormat("PNG")}
 _SAFE_FORMATS = _TEXT_FORMATS | _IMAGE_FORMATS
+
+# The same three formats password managers use to keep secrets out of
+# Windows Clipboard History and Cloud Clipboard sync. Nothing we put on the
+# clipboard should persist anywhere beyond the one paste it's for - dictation
+# stays local per CLAUDE.md.
+_EXCLUDE_FORMATS = [win32clipboard.RegisterClipboardFormat(name) for name in (
+    "ExcludeClipboardContentFromMonitorProcessing",
+    "CanIncludeInClipboardHistory",
+    "CanUploadToCloudClipboard")]
 
 # Guards on both sides so "uh-huh" survives. The surrounding commas exist
 # because of the filler pause, so they go with it ("should, uh, remove" ->
@@ -250,6 +260,12 @@ class Clipboard:
                 time.sleep(self.retry_s)
         return False
 
+    def _mark_transient(self):
+        """Call with the clipboard already open, right after writing to it."""
+        zero = struct.pack("i", 0)
+        for fmt in _EXCLUDE_FORMATS:
+            win32clipboard.SetClipboardData(fmt, zero)
+
     def paste(self, text):
         saved = {}
         restorable = False
@@ -270,6 +286,7 @@ class Clipboard:
                         restorable = False
                 win32clipboard.EmptyClipboard()
                 win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+                self._mark_transient()
             finally:
                 win32clipboard.CloseClipboard()
         else:
@@ -289,6 +306,9 @@ class Clipboard:
                 win32clipboard.EmptyClipboard()
                 for fmt, data in saved.items():
                     win32clipboard.SetClipboardData(fmt, data)
+                # marked transient too, so restoring the user's own prior
+                # clipboard doesn't create a fresh history entry for it
+                self._mark_transient()
             finally:
                 win32clipboard.CloseClipboard()
 
@@ -297,6 +317,7 @@ class Clipboard:
             try:
                 win32clipboard.EmptyClipboard()
                 win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+                self._mark_transient()
             finally:
                 win32clipboard.CloseClipboard()
 

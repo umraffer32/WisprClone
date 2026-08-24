@@ -3,6 +3,43 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — clipboard history/cloud-sync exclusion (branch: polish)
+
+- Compared WisprClone against three other open-source Wispr Flow clones
+  (drajb/whisper-local, nexos-1/localflow, zerodrive16/LocalFlow). Most of
+  what they do WisprClone already does as well or better (polish guardrails,
+  UIA-based paste targeting, per-pixel-alpha pill); three candidates got a
+  closer look, only one held up.
+- Added: dictated text now gets marked with the ExcludeClipboardContentFrom-
+  MonitorProcessing / CanIncludeInClipboardHistory / CanUploadToCloudClipboard
+  formats (Clipboard._mark_transient() in transcribe.py) on every clipboard
+  write, including the post-paste restore of the user's own prior clipboard
+  contents. Windows Clipboard History and Cloud Clipboard sync are both off
+  on this machine today, so nothing was actually leaking, but Win+V is a
+  one-keystroke prompt away from turning history on, and CLAUDE.md already
+  commits to "no dictation audio or text leaves it." Cheap (12 lines, no new
+  dependency, no added latency) defense-in-depth.
+- Tested and verified: a standalone script confirmed Clipboard.set_text()
+  actually sets all three exclusion formats (present=True, value=zeroed
+  DWORD) on real clipboard writes. Then verified live - turned on Windows
+  Clipboard History, restarted the app, dictated with a Ctrl+C'd control
+  item also on the clipboard: the control item showed up in Win+V, the
+  dictation did not, across two separate dictations. One stale pre-fix
+  clipboard entry (dictated before the restart picked up the new code)
+  showed up once on the first check and was cleared before the clean runs.
+- Rejected: a hotwords-echo guard (discard a transcript that just echoes the
+  hotwords bias list back) - zero occurrences across 719 logged dictations
+  against a pipeline that already stacks vad_filter, the no_speech_prob
+  filter, min_recording_s, and trailing-silence trim. The guard's own
+  false-positive case (dictating a single hotword alone, e.g. "Ollama") is
+  more likely to fire than the bug it guards against.
+- Rejected: WASAPI native-rate capture + soxr resample (whisper-local's
+  technique for avoiding shared-mode resampling artifacts). Doesn't apply -
+  the default mic here runs via MME, not WASAPI, so whisper-local's own code
+  would record at 16k anyway on this setup. Would also add real fragility to
+  Recorder.reopen()'s device-following logic for a quality difference that's
+  below the noise floor of a mic already benchmarked at ~19dB SNR.
+
 ## 2026-08-23 — polish revival, latency hunt, code review (branch: polish, uncommitted)
 
 - Revived the LLM polish pass (revert of its Aug 21 removal) to test whether it
