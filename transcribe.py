@@ -469,6 +469,10 @@ class Transcriber(threading.Thread):
         try:
             _ollama.post("http://127.0.0.1:11434/api/generate", json={
                 "model": self.polish_cfg["model"], "keep_alive": "24h",
+                # same num_ctx as _polish, or this warmup loads the model at
+                # Ollama's 4096 default and the first real polish pays a full
+                # reload mid-dictation (~4s, measured)
+                "options": {"num_ctx": 8192},
             }, timeout=120)
         except Exception as e:
             log.warning("polish warmup failed (%s); first toggle dictation "
