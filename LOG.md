@@ -21,6 +21,18 @@ Diff-level detail lives in git history.
   removes the shadow entirely.
 - No new dependencies: faster-whisper 1.2.1 already bundles the Silero model
   whisper's own vad_filter uses, warm in-process.
+- Wrote the analysis half early (mine_streaming.py, sibling of mine_vocab.py)
+  so the threshold decision is one command whenever enough records exist,
+  instead of a session of work later. Per-setting table over toggle records:
+  segments per dictation, merge-rule and force-cut pressure, and estimated
+  felt latency from an affine cost fit (whisper_s ~ a + b*audio_s over the
+  existing 344 job lines; polish_s ~ a + b*chars over shadow records) -
+  affine because whisper's cost is nearly flat to ~28s, so a per-second rate
+  would understate short-segment cost ~3x. Verified against synthetic data
+  with hand-computed answers: both fits recover exact coefficients, every
+  table column matches, torn trailing JSON lines are skipped. Real-data run
+  sanity-checked too (fit predicts 0.61s polish on a 132-char dictation that
+  measured 0.58s).
 
 ## 2026-08-24 — repo cleanup pass (branch: polish)
 
