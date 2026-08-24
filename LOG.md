@@ -3,6 +3,31 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — polish timeout, context window, and silent-fallback fixes (branch: streaming)
+
+- A 183.8s dictation (2,508 chars) hit the 8s polish timeout and pasted raw;
+  the silent fallback meant it read like polish did a bad job when polish
+  never ran. Day one of genuinely long dictations found the ceiling: the
+  measured cost model (polish_s ~ 0.15 + 0.0035/char) puts 2,500 chars at
+  ~9s. Second-opinion review (Fable) before fixing.
+- timeout_s 8 -> 30, derived not guessed: max_recording_s=300 bounds the
+  worst dictation to ~16-18s of polish, and the fail-fast the 8s bought was
+  mostly illusory on loopback (Ollama down = instant connection refusal, no
+  timeout involved; the only scenario 8s helps - accepted connection then
+  hang - has never occurred in the logs, while it guaranteed failure on
+  post-eviction cold loads).
+- Added num_ctx=8192 to the polish request (was silently running at Ollama's
+  4096 default; verified live via /api/ps). The looming failure was nasty:
+  past ~7,500 chars of dictation, Ollama truncates the FRONT of the prompt -
+  the instructions - and the model free-runs on bare dictation text with
+  nothing in the API response admitting it. ~250MB extra KV cache, trivial.
+  Verified the model reloads at 8192 and responds.
+- Polish failures now set flash_error (red pill flash via existing plumbing)
+  so a fallback is visible instead of silent. Guard vetoes (ratio/question)
+  deliberately don't flash - those mean polish ran and was overruled by
+  design. A timeout also kicks a background re-warm so a cold-load failure
+  heals itself for the next dictation.
+
 ## 2026-08-24 — Phase A streaming shadow (branch: streaming, off polish)
 
 - Started the streaming plan shelved on 2026-08-23 (the three-model-reviewed

@@ -486,7 +486,11 @@ class Transcriber(threading.Thread):
             r = _ollama.post("http://127.0.0.1:11434/api/generate", json={
                 "model": p["model"], "stream": False, "keep_alive": "24h",
                 "prompt": POLISH_PROMPT + text,
-                "options": {"temperature": 0},
+                # num_ctx: Ollama's runtime default is 4096 tokens, which a
+                # max-length dictation approaches; overflow silently truncates
+                # the FRONT of the prompt - the instructions - leaving the
+                # model free-running on bare dictation text
+                "options": {"temperature": 0, "num_ctx": 8192},
             }, timeout=p["timeout_s"])
             r.raise_for_status()
             polished = r.json()["response"].strip()
@@ -499,8 +503,16 @@ class Transcriber(threading.Thread):
                 log.warning("polish dropped a question, using raw")
                 return text
             return polished
+        except requests.Timeout:
+            log.exception("polish timed out, using raw text")
+            # a post-eviction cold model load is the likely cause; re-warm in
+            # the background so the next dictation gets polished
+            threading.Thread(target=self._warm_polish, daemon=True).start()
+            self.status.flash_error = True
+            return text
         except Exception:
             log.exception("polish pass failed, using raw text")
+            self.status.flash_error = True
             return text
 
     def run(self):

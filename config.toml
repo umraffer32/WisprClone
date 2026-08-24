@@ -43,7 +43,11 @@ continuation_gap_s = 0  # if the last dictation ended without a period and you
 [polish]
 enabled = true          # LLM cleanup for toggle-mode (long-form) dictations only
 model = "qwen2.5:7b-instruct"  # served locally by Ollama at 127.0.0.1:11434
-timeout_s = 8           # real polish runs 1-3s; past this, fall back to raw fast
+timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
+                        # dictation polishes in ~16-18s measured, so 30 leaves
+                        # headroom (re-derive if max_recording_s changes). An
+                        # Ollama that isn't running fails on connect instantly
+                        # regardless of this value.
 min_ratio = 0.4         # reject the polish result outside [min_ratio, max_ratio]
 max_ratio = 2.5         # of the original length - likely means the model misbehaved
 
