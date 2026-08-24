@@ -44,6 +44,11 @@ Diff-level detail lives in git history.
   deliberately don't flash - those mean polish ran and was overruled by
   design. A timeout also kicks a background re-warm so a cold-load failure
   heals itself for the next dictation.
+- Follow-up caught live: the num_ctx fix introduced a restart tax - the
+  warmup request sent no options, loading the model at Ollama's 4096
+  default, so the first real polish after every restart forced a full
+  reload at 8192 (measured 4.11s on a two-sentence PTT clip). Warmup now
+  sends the same num_ctx as real requests.
 
 ## 2026-08-24 — Phase A streaming shadow (branch: streaming, off polish)
 
