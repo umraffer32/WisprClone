@@ -57,6 +57,13 @@ Diff-level detail lives in git history.
   length). A second-opinion architect review refined the plan: offline Silero
   VAD shadow phase first, then streaming with sentence-holdback polish as one
   milestone. Parked until the current setup's feel is proven insufficient.
+- Added SETUP.md (first-person walkthrough for building your own copy of
+  this instead of subscribing to Wispr Flow) and corrections.txt.example.
+  Fixed two stale README claims while at it: "Things I tried and reversed"
+  still said the polish pass was removed entirely, and Scope still framed
+  this as a portfolio piece not meant to be run. Doing this now rather than
+  waiting for merge - publishing SETUP.md next to a known-false claim two
+  sections up didn't make sense.
 
 ## 2026-08-22
 

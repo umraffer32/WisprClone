@@ -1,0 +1,8 @@
+# One correction per line: wrong=right (whole-word, case-insensitive match).
+# Edits apply to the next dictation, no restart needed.
+
+# Copy this file to corrections.txt and fill it in with your own
+# mishearings, names, and project vocabulary. corrections.txt is
+# gitignored on purpose - it fills up with things specific to you.
+github=GitHub
+there going=they're going

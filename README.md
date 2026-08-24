@@ -40,7 +40,7 @@ Nothing shares mutable state without a clear owner: the audio buffer belongs to 
 
 ## Things I tried and reversed
 
-Early versions ran an LLM polish pass over toggle-mode dictation through a local Ollama model, and separately tried bridging punctuation across consecutive dictations in the same window. The polish pass got removed entirely, code and Ollama dependency both, once it turned out to add latency for a wording improvement I didn't actually want most of the time. The punctuation bridging stayed in the code but got turned off by default: it glued together enough unrelated messages in normal chat-style use that the false-positive rate wasn't worth what it fixed. Both are visible in git history if you want to see the actual back-and-forth.
+Early versions ran an LLM polish pass over toggle-mode dictation through a local Ollama model, and separately tried bridging punctuation across consecutive dictations in the same window. The first cut of the polish pass got removed entirely, code and Ollama dependency both, once it turned out to add latency for a wording improvement I didn't actually want most of the time. It's back now (see [SETUP.md](SETUP.md) for the how and why), running through a different model with the latency problem actually fixed, though the prompt and its guardrails are still being tuned as I use it day to day. The punctuation bridging stayed in the code but got turned off by default: it glued together enough unrelated messages in normal chat-style use that the false-positive rate wasn't worth what it fixed. Both are visible in git history if you want to see the actual back-and-forth.
 
 ## Tech stack
 
@@ -48,12 +48,20 @@ Early versions ran an LLM polish pass over toggle-mode dictation through a local
 
 ## How I have mine set up
 
-- Model: `distil-large-v3` on CUDA, chosen over `large-v3-turbo` for its stronger resistance to hallucinating text on short or silent clips, the exact failure mode a push-to-talk tool with short bursts runs into.
+- Model: `large-v3-turbo` on CUDA. I tested all three faster-whisper options: `distil-large-v3` felt instant but had rougher edges, `large-v3` heard best but added about a second on short push-to-talk bursts, and `large-v3-turbo` gives distil-class speed with accuracy close to `large-v3`.
 - Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl double-tap for toggle mode.
 - Audio ducking on: other apps drop to 5% volume while I'm recording.
 - Mic releases after 10 seconds idle so Windows' mic-in-use indicator doesn't stay lit all day.
 - Repaste offer stays up for 10 seconds before it disappears on its own.
 
+## Setup
+
+Everything above is what running one of these looks like day to day.
+[SETUP.md](SETUP.md) is the actual how-to: clone, venv, model download,
+corrections file, optional Ollama polish, and the two Windows-specific
+pieces that took real trial and error (RUNASADMIN so dictation reaches
+elevated windows, and a Task Scheduler task instead of a Startup shortcut).
+
 ## Scope
 
-This is a personal tool built around my own hardware, my own corrections list, and my own habits, not a general-purpose release. It's Windows-only by design (the input hook, clipboard handling, and tray icon are all Win32-specific), and the model is English-only. It's here as a portfolio piece rather than something meant to be cloned and run as-is.
+This is a personal tool built around my own hardware, my own corrections list, and my own habits, not a general-purpose release. It's Windows-only by design (the input hook, clipboard handling, and tray icon are all Win32-specific), and the model is English-only. If you want to build your own instead of paying for Wispr Flow, [SETUP.md](SETUP.md) walks through exactly how I set mine up.
