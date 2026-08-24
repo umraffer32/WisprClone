@@ -48,7 +48,7 @@ Early versions ran an LLM polish pass over toggle-mode dictation through a local
 
 ## How I have mine set up
 
-- Model: `large-v3-turbo` on CUDA. I tested all three faster-whisper options: `distil-large-v3` felt instant but had rougher edges, `large-v3` heard best but added about a second on short push-to-talk bursts, and `large-v3-turbo` gives distil-class speed with accuracy close to `large-v3`.
+- Model: `large-v3-turbo` on CUDA — [SETUP.md](SETUP.md) has the reasoning behind that choice.
 - Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl double-tap for toggle mode.
 - Audio ducking on: other apps drop to 5% volume while I'm recording.
 - Mic releases after 10 seconds idle so Windows' mic-in-use indicator doesn't stay lit all day.

@@ -3,6 +3,23 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — repo cleanup pass (branch: polish)
+
+- Asked for a redundancy/dead-weight sweep of the whole repo. Two real
+  findings out of it: removed wisprclone.ico, tracked in git but unused -
+  the tray icon has always come from ui.py's _icon_image(), drawn with PIL
+  at runtime, not loaded from a file. Confirmed the tray icon is unaffected
+  before deleting. Also de-duplicated the whisper-model reasoning that
+  appeared word-for-word in both README.md and SETUP.md - README now just
+  states the choice and points to SETUP.md, which keeps the actual
+  reasoning, matching the intended split (README narrative, SETUP
+  instructional). A third finding (two near-identical hover/flash color
+  blocks in ui.py's Pill._render, for the checkmark and dismiss-X) was
+  left as-is - cosmetic-only, no behavior difference, not worth the
+  abstraction. Checked .gitignore/git ls-files while at it: nothing
+  personal (history.log, corrections.txt, wispr_flow_history.txt) is
+  actually tracked.
+
 ## 2026-08-24 — clipboard history/cloud-sync exclusion (branch: polish)
 
 - Compared WisprClone against three other open-source Wispr Flow clones
