@@ -2,6 +2,7 @@
 
 import ctypes
 import ctypes.wintypes as wt
+import json
 import logging
 import os
 import re
@@ -27,6 +28,7 @@ import pywintypes
 import requests
 import win32clipboard
 from faster_whisper import WhisperModel
+from faster_whisper.vad import VadOptions, get_speech_timestamps
 from pynput.keyboard import Controller, Key
 
 POLISH_PROMPT = (
@@ -352,6 +354,24 @@ def trim_trailing_silence(audio, keep_s=0.25):
     return audio[:end]
 
 
+# --- Phase A streaming shadow: diagnostic only, removed when real streaming lands.
+SHADOW_SILENCE_MS = (500, 700, 1000)
+
+
+def vad_shadow(audio, jobs):
+    """{min_silence_ms: [(start_s, end_s), ...]}, or None if a real job is waiting."""
+    out = {}
+    for ms in SHADOW_SILENCE_MS:
+        if not jobs.empty():
+            return None  # never make a queued dictation wait more than one pass
+        ts = get_speech_timestamps(audio, VadOptions(
+            min_silence_duration_ms=ms, speech_pad_ms=0,
+            min_speech_duration_ms=0, max_speech_duration_s=float("inf")))
+        out[ms] = [(round(t["start"] / 16000, 2), round(t["end"] / 16000, 2))
+                   for t in ts]
+    return out
+
+
 class Transcriber(threading.Thread):
     def __init__(self, cfg, base_dir, jobs, status):
         super().__init__(daemon=True, name="transcriber")
@@ -553,6 +573,31 @@ class Transcriber(threading.Thread):
                 # offer click-to-repaste only when the paste probably missed
                 if not (caret_visible() or focused_editable() or is_terminal()):
                     self.status.result_until = time.monotonic() + self.result_display_s
+
+                # Streaming shadow (Phase A): log the segment bounds streaming
+                # would have used. Post-paste so it can't be felt; bails
+                # between passes when a job waits; own except so it can't
+                # flash the pill.
+                try:
+                    t3 = time.monotonic()
+                    segs = vad_shadow(audio, self.jobs)
+                    if segs is not None:
+                        s700 = [b for b in segs[700] if b[1] - b[0] >= 0.2]  # headline sans blips
+                        speech = sum(e - s for s, e in s700)
+                        log.info("vad shadow: 700ms segs=%d last=%.1fs longest=%.1fs "
+                                 "pause=%.1fs shadow=%.2fs",
+                                 len(s700), s700[-1][1] - s700[-1][0] if s700 else 0,
+                                 max((e - s for s, e in s700), default=0),
+                                 len(audio) / 16000 - speech, time.monotonic() - t3)
+                        rec = {"ts": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+                               "mode": job["mode"], "audio_s": round(len(audio) / 16000, 1),
+                               "whisper_s": round(t1 - t0, 2), "polish_s": round(t2 - t1, 2),
+                               "chars": len(text), "shadow_s": round(time.monotonic() - t3, 2),
+                               "segs": {str(ms): [list(b) for b in bs] for ms, bs in segs.items()}}
+                        with open(self.base_dir / "vad_shadow.log", "a", encoding="utf-8") as f:
+                            f.write(json.dumps(rec) + "\n")
+                except Exception:
+                    log.exception("vad shadow failed")
             except Exception:
                 log.exception("transcription job failed")
                 self.status.flash_error = True

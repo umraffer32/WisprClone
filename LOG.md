@@ -3,6 +3,25 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — Phase A streaming shadow (branch: streaming, off polish)
+
+- Started the streaming plan shelved on 2026-08-23 (the three-model-reviewed
+  Phase A). No streaming code yet: after each dictation pastes normally, a
+  shadow pass runs Silero VAD over the same audio at three
+  min_silence_duration_ms candidates (500/700/1000) and logs the segment
+  bounds streaming *would* have cut at — one INFO headline line in
+  wisprclone.log, one raw JSON record per job in vad_shadow.log (bounds,
+  durations, timings, and a char count; never transcript text). A week or so
+  of real dictations answers which pause threshold produces segments worth
+  transcribing before the expensive build starts.
+- Runs post-paste so it can't be felt, bails between passes the moment a
+  real job is queued (worst-case delay to a queued dictation: one sub-second
+  VAD pass), and wraps in its own except so a shadow failure can't flash
+  the pill. No config knob — the branch is the switch; checking out polish
+  removes the shadow entirely.
+- No new dependencies: faster-whisper 1.2.1 already bundles the Silero model
+  whisper's own vad_filter uses, warm in-process.
+
 ## 2026-08-24 — repo cleanup pass (branch: polish)
 
 - Asked for a redundancy/dead-weight sweep of the whole repo. Two real

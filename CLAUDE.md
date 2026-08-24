@@ -23,6 +23,10 @@ dictation audio or text leaves it.
   counter. `wisprclone.log` (1MB rotating) holds diagnostics and per-job
   timing lines (`job: audio=… whisper=… polish=… mode=…`) plus raw/polished
   diffs whenever polish changes text.
+- `vad_shadow.log` — streaming-branch diagnostic only: one JSON line per
+  dictation with the Silero segment bounds streaming would have used
+  (500/700/1000ms candidates). Gitignored via `*.log`; goes away with the
+  shadow when real streaming lands.
 
 ## Launching and restarting — read before touching a running instance
 
