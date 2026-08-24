@@ -3,6 +3,23 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — polish goes mode-agnostic, gated by duration (branch: streaming)
+
+- The parked min_audio_s idea, implemented - but with the threshold question
+  answered by preference instead of the planned timing histogram. Asked
+  point-blank when he wants polish vs exact words, Uriah's answer: polish
+  everything in both modes (the Wispr Flow benchmark - every dictation feels
+  polished and instant), occasional stolen words are tolerable, and quick
+  bursts skipping polish is explicitly fine. That reframes the gate as pure
+  latency protection rather than a data-derived cutoff: polish costs
+  ~0.4-0.6s on a short clip, which is what stands between PTT feeling
+  instant and feeling laggy. min_audio_s = 5 in [polish]; the mode check in
+  Transcriber.run() replaced with the duration check. PTT dictations >= 5s
+  now get polished for the first time.
+- Reversal is one config line (raise min_audio_s or disable polish), which
+  matched his stated appetite: "if it turns out that we don't want
+  everything polished, we can easily turn back the clock."
+
 ## 2026-08-24 — polish timeout, context window, and silent-fallback fixes (branch: streaming)
 
 - A 183.8s dictation (2,508 chars) hit the 8s polish timeout and pasted raw;

@@ -41,7 +41,10 @@ continuation_gap_s = 0  # if the last dictation ended without a period and you
                        # in chat-style use outweighed the benefit
 
 [polish]
-enabled = true          # LLM cleanup for toggle-mode (long-form) dictations only
+enabled = true          # LLM cleanup pass on dictations from either mode
+min_audio_s = 5         # skip polish under this many seconds of audio - pure
+                        # latency protection so quick bursts keep feeling
+                        # instant (polish costs ~0.4-0.6s on a short clip)
 model = "qwen2.5:7b-instruct"  # served locally by Ollama at 127.0.0.1:11434
 timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
                         # dictation polishes in ~16-18s measured, so 30 leaves

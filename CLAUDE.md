@@ -2,9 +2,9 @@
 
 Local push-to-talk dictation for Windows. Hold the mouse X2 button to record,
 release to transcribe (faster-whisper on CUDA) and paste into the focused app.
-Tap Right Ctrl to toggle long-form recording, which also runs an LLM polish
-pass through a local Ollama model. Everything runs on this machine; no
-dictation audio or text leaves it.
+Tap Right Ctrl to toggle long-form recording. Dictations over min_audio_s
+(either mode) also get an LLM polish pass through a local Ollama model.
+Everything runs on this machine; no dictation audio or text leaves it.
 
 ## Files
 
@@ -14,8 +14,8 @@ dictation audio or text leaves it.
   blocks while recording, enqueues `{"blocks", "mode"}` jobs on stop. Also
   `Ducker` (lowers other apps' volume while the mic is hot).
 - `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, regex
-  `clean_text()`, LLM polish (toggle mode only), clipboard paste. Also the
-  polish prompt and its output guards.
+  `clean_text()`, LLM polish (duration-gated, mode-agnostic), clipboard
+  paste. Also the polish prompt and its output guards.
 - `ui.py` — recording pill overlay and tray icon/menu.
 - `config.toml` — all knobs. The app must be restarted to pick up changes.
 - `corrections.txt` — wrong=right word fixes, applied live (no restart).

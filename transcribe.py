@@ -549,7 +549,11 @@ class Transcriber(threading.Thread):
                 if not text:
                     continue  # silence/hallucination: paste nothing
                 t1 = time.monotonic()
-                if job["mode"] == "toggle" and self.polish_cfg["enabled"]:
+                # duration decides polish, not which hotkey started the
+                # recording - short bursts stay instant, anything longer
+                # gets cleaned regardless of mode
+                if (self.polish_cfg["enabled"]
+                        and len(audio) / 16000 >= self.polish_cfg["min_audio_s"]):
                     raw = text
                     text = self._polish(text)
                     if text != raw:
