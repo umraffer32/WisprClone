@@ -3,5 +3,6 @@ __pycache__/
 *.pyc
 *.log
 wispr_flow_history.txt
+pill_pos.txt
 corrections.txt
 WisprClone.lnk.startup-backup

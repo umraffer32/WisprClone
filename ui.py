@@ -74,7 +74,7 @@ class _BLENDFUNCTION(ctypes.Structure):
 
 
 class Pill:
-    def __init__(self, root, on_result_click=None, on_dismiss=None):
+    def __init__(self, root, on_result_click=None, on_dismiss=None, pos_file=None):
         self.root = root
         self.on_result_click = on_result_click
         self.on_dismiss = on_dismiss
@@ -82,12 +82,18 @@ class Pill:
         root.overrideredirect(True)
         root.attributes("-topmost", True)
         self._w = _W
-        self._y = root.winfo_screenheight() - _H - 60 - _PAD
-        x = (root.winfo_screenwidth() - _W - 2 * _PAD) // 2
-        root.geometry(f"{_W + 2 * _PAD}x{_H + 2 * _PAD}+{x}+{self._y}")
-        # NOACTIVATE means this click never steals focus from the app the
-        # user wants to paste into - which is the whole point of the feature
-        root.bind("<Button-1>", self._clicked)
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        self._cx = sw // 2             # pill center x; dragging moves it
+        self._y = sh - _H - 60 - _PAD  # window top y
+        self._pos_file = pos_file
+        self._load_pos(sw, sh)
+        root.geometry(f"{_W + 2 * _PAD}x{_H + 2 * _PAD}"
+                      f"+{self._cx - (_W + 2 * _PAD) // 2}+{self._y}")
+        # NOACTIVATE means clicks and drags never steal focus from the app
+        # the user wants to paste into - the whole point of the feature
+        root.bind("<Button-1>", self._press)
+        root.bind("<B1-Motion>", self._drag)
+        root.bind("<ButtonRelease-1>", self._release)
         root.bind("<Motion>", self._motion)
         root.bind("<Leave>", self._leave)
         # tk font sizes are points; PIL wants pixels (96dpi: 8pt=11px, 9pt=12px)
@@ -106,13 +112,61 @@ class Pill:
         self._x_dismissing = False  # click-flash in progress, then hide
         self._check_hover = False
         self._check_flashing = False  # click-flash in progress, then repaste
+        self._press_xy = None   # screen coords where the button went down
+        self._press_win = None  # window origin at that moment
+        self._dragged = False   # past the click-vs-drag threshold this press
         root.withdraw()
+
+    def _load_pos(self, sw, sh):
+        try:
+            if self._pos_file and os.path.exists(self._pos_file):
+                cx, y = map(int, open(self._pos_file).read().split(","))
+                self._cx = min(max(cx, _W // 2), sw - _W // 2)
+                self._y = min(max(y, -_PAD), sh - _H - _PAD)
+        except Exception:
+            log.exception("bad pill position file, using default")
+
+    def _save_pos(self):
+        if not self._pos_file:
+            return
+        try:
+            with open(self._pos_file, "w") as f:
+                f.write(f"{self._cx},{self._y}")
+        except OSError:
+            log.exception("could not save pill position")
+
+    def _press(self, event):
+        self._press_xy = (event.x_root, event.y_root)
+        self._press_win = (self.root.winfo_x(), self.root.winfo_y())
+        self._dragged = False
+
+    def _drag(self, event):
+        dx = event.x_root - self._press_xy[0]
+        dy = event.y_root - self._press_xy[1]
+        if not self._dragged and abs(dx) + abs(dy) < 5:
+            return  # not past the threshold yet; might still be a click
+        self._dragged = True
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        x = min(max(self._press_win[0] + dx, -_PAD), sw - self._w - _PAD)
+        y = min(max(self._press_win[1] + dy, -_PAD), sh - _H - _PAD)
+        self.root.geometry(f"+{x}+{y}")
+
+    def _release(self, event):
+        if self._dragged:
+            self._cx = self.root.winfo_x() + (self._w + 2 * _PAD) // 2
+            self._y = self.root.winfo_y()
+            self._save_pos()
+            self._dragged = False
+        else:
+            self._clicked(event)
 
     def _resize(self, w):
         if self._w == w:
             return
         self._w = w
-        x = (self.root.winfo_screenwidth() - w - 2 * _PAD) // 2
+        # widen/narrow around the dragged center, clamped on-screen
+        sw = self.root.winfo_screenwidth()
+        x = min(max(self._cx - (w + 2 * _PAD) // 2, -_PAD), sw - w - _PAD)
         self.root.geometry(f"{w + 2 * _PAD}x{_H + 2 * _PAD}+{x}+{self._y}")
 
     @staticmethod

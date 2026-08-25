@@ -16,7 +16,8 @@ Everything runs on this machine; no dictation audio or text leaves it.
 - `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, regex
   `clean_text()`, LLM polish (duration-gated, mode-agnostic), clipboard
   paste. Also the polish prompt and its output guards.
-- `ui.py` — recording pill overlay and tray icon/menu.
+- `ui.py` — recording pill overlay (draggable; position persists in the
+  gitignored `pill_pos.txt`) and tray icon/menu.
 - `config.toml` — all knobs. The app must be restarted to pick up changes.
 - `corrections.txt` — wrong=right word fixes, applied live (no restart).
 - `history.log` — every pasted dictation, timestamped. Seeds the tray word

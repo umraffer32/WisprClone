@@ -3,6 +3,16 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — pill is draggable, position persists (branch: streaming)
+
+- The parked maybe-later from the slimming decision, implemented as the
+  full draggable option (what Wispr Flow itself shipped) rather than config
+  offsets. Left-drag moves it, 5px threshold keeps result-state clicks
+  working, position clamps on-screen and saves to the gitignored
+  pill_pos.txt on release (state, not config - config.toml stays clean).
+  Result-state widening now grows around the parked center instead of
+  recentering on the screen. Delete pill_pos.txt to reset.
+
 ## 2026-08-24 — pill resized 57x28 -> 64x24 (branch: streaming)
 
 - The pill's top edge was grazing the Claude textbox; the bottom edge is

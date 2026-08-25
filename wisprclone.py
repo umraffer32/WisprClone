@@ -243,7 +243,8 @@ def main():
     def dismiss_result():
         status.result_until = 0.0  # X clicked: hide without repasting
 
-    pill = Pill(root, on_result_click=repaste_last, on_dismiss=dismiss_result)
+    pill = Pill(root, on_result_click=repaste_last, on_dismiss=dismiss_result,
+                pos_file=BASE / "pill_pos.txt")
     tray = make_tray(BASE, cfg, status, clipboard, recorder)
     tray.run_detached()
 
