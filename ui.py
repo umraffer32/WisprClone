@@ -96,7 +96,8 @@ class Pill:
         self._hwnd = None
         self._last_sig = None
         self.levels = collections.deque([0.0] * _NBARS, maxlen=_NBARS)
-        self._glow = 0.0  # smoothed voice level driving the recording halo
+        self._glow = 0.0   # halo intensity this frame, driven by _pulse
+        self._pulse = 0.0  # phase of the breathing cycle, advances while recording
         self.visible = False
         self.flash_until = 0
         self._dismiss_box = None  # (x0, y0, x1, y1) hit-box, result state only
@@ -178,6 +179,7 @@ class Pill:
             self.visible = False
         self.levels.extend([0.0] * _NBARS)
         self._glow = 0.0
+        self._pulse = 0.0
         self._x_hover = False
         self._x_dismissing = False
         self._check_hover = False
@@ -193,8 +195,11 @@ class Pill:
             # halo: the pill's own silhouette blurred into the padding,
             # breathing with the smoothed voice level
             gd = ImageDraw.Draw(img)
+            # whiter and hotter than the bars: the 0.65 whole-pill alpha
+            # dims this on the way out. Wide alpha swing so the pulse
+            # reads clearly from dim to very bright
             gd.rounded_rectangle(pill, radius=_RADIUS * S,
-                                 fill=_BAR_RGB + (int(70 + 150 * self._glow),))
+                                 fill=(195, 238, 255, int(60 + 195 * self._glow)))
             img = img.filter(ImageFilter.GaussianBlur((2.5 + 3.5 * self._glow) * S))
         d = ImageDraw.Draw(img)
         d.rounded_rectangle(pill, radius=_RADIUS * S,
@@ -306,9 +311,10 @@ class Pill:
             # x24: sized so a normal voice at ~2.5ft on this quiet mic drives
             # the mid-range; the pill sees raw level, normalize_peak doesn't
             # apply until transcription
-            lv = min(1.0, level * 24)
-            self.levels.append(lv)
-            self._glow = 0.75 * self._glow + 0.25 * lv
+            self.levels.append(min(1.0, level * 24))
+            # halo breathes on its own 1.2s clock, independent of voice level
+            self._pulse = (self._pulse + 0.033 / 1.2) % 1.0
+            self._glow = 0.5 - 0.5 * math.cos(2 * math.pi * self._pulse)
         sig = (state, self._w, tuple(self.levels), round(self._glow, 2),
                max(1, math.ceil(level)) if state == "result" else 0,
                self._x_hover, self._x_dismissing,

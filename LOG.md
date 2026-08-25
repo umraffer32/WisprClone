@@ -3,6 +3,21 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — glow halo: reactive -> pulsating, icy white-blue (branch: streaming)
+
+- Three same-evening refinements, each approved live before the next: halo
+  brightened (its old floor got eaten by the 0.65 whole-pill alpha), then
+  reworked from voice-tracking to a steady 1.2s breathing pulse (Uriah's
+  call - bars stay reactive, the border just breathes), then recolored from
+  saturated sky blue to icy white-blue (195, 238, 255). Alpha swings 60-255
+  across the cycle and blur radius rides the same value, so it swells as it
+  brightens.
+- Side finding while trying to screenshot it for him: the pill is invisible
+  to every GDI capture path (PrtScn, PIL ImageGrab, BitBlt even with
+  CAPTUREBLT) - UpdateLayeredWindow content just isn't there. Pictures of
+  the pill come from rendering Pill._render offline and compositing at
+  _ALPHA, which is what the scratchpad render script did.
+
 ## 2026-08-24 — pill recording animation overhaul (branch: streaming)
 
 - Four effects added in one pass at Uriah's "fuck it, add all four": a
