@@ -191,15 +191,13 @@ class Pill:
         w, h = (self._w + 2 * _PAD) * S, (_H + 2 * _PAD) * S
         pill = (_PAD * S, _PAD * S, (_PAD + self._w) * S - 1, (_PAD + _H) * S - 1)
         img = Image.new("RGBA", (w, h))
-        if state == "recording" and self._glow > 0.02:
+        if state == "recording":
             # halo: the pill's own silhouette blurred into the padding,
-            # breathing with the smoothed voice level
+            # breathing on the pulse clock. Floor of 120 keeps a visible
+            # ring at the dim end of the cycle - it breathes, never vanishes
             gd = ImageDraw.Draw(img)
-            # whiter and hotter than the bars: the 0.65 whole-pill alpha
-            # dims this on the way out. Wide alpha swing so the pulse
-            # reads clearly from dim to very bright
             gd.rounded_rectangle(pill, radius=_RADIUS * S,
-                                 fill=(195, 238, 255, int(60 + 195 * self._glow)))
+                                 fill=(195, 238, 255, int(120 + 135 * self._glow)))
             img = img.filter(ImageFilter.GaussianBlur((2.5 + 3.5 * self._glow) * S))
         d = ImageDraw.Draw(img)
         d.rounded_rectangle(pill, radius=_RADIUS * S,
@@ -208,6 +206,23 @@ class Pill:
         self._check_box = None
         mid = h / 2
         if state == "recording":
+            # interior vignette: a cold-blue radial lift at the center that
+            # falls to the dark rim, breathing in sync with the halo so the
+            # pulse reads as coming from inside the pill
+            px0, py0 = (_PAD + 2) * S, (_PAD + 2) * S
+            pw, ph = (self._w - 4) * S, (_H - 4) * S
+            ys, xs = np.ogrid[0:ph, 0:pw]
+            r = np.sqrt(((xs - pw / 2) / (pw / 2)) ** 2
+                        + ((ys - ph / 2) / (ph / 2)) ** 2)
+            lift = np.clip(1 - r, 0, 1) ** 1.5
+            mask = Image.new("L", (pw, ph), 0)
+            ImageDraw.Draw(mask).rounded_rectangle(
+                (0, 0, pw - 1, ph - 1), radius=(_RADIUS - 2) * S, fill=255)
+            tint = np.zeros((ph, pw, 4), np.uint8)
+            tint[:, :, :3] = (70, 130, 180)
+            tint[:, :, 3] = (lift * (70 + 60 * self._glow)
+                             * (np.asarray(mask) / 255.0)).astype(np.uint8)
+            img.alpha_composite(Image.fromarray(tint), (px0, py0))
             bw = (self._w - 2 * _RADIUS) * S / _NBARS
             recent = list(self.levels)[-(_NBARS // 2):]  # oldest..newest
             for i in range(_NBARS):
@@ -312,8 +327,9 @@ class Pill:
             # the mid-range; the pill sees raw level, normalize_peak doesn't
             # apply until transcription
             self.levels.append(min(1.0, level * 24))
-            # halo breathes on its own 1.2s clock, independent of voice level
-            self._pulse = (self._pulse + 0.033 / 1.2) % 1.0
+            # halo breathes on its own clock, independent of voice level;
+            # 1.2s felt too quick, 1.8 reads as calm breathing
+            self._pulse = (self._pulse + 0.033 / 1.8) % 1.0
             self._glow = 0.5 - 0.5 * math.cos(2 * math.pi * self._pulse)
         sig = (state, self._w, tuple(self.levels), round(self._glow, 2),
                max(1, math.ceil(level)) if state == "result" else 0,

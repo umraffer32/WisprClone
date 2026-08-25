@@ -3,6 +3,18 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — interior vignette and breathing tune (branch: streaming)
+
+- The flat #1e1e28 interior was the last dead layer; added a cold-blue
+  radial lift behind the bars that breathes on the same clock as the halo,
+  so the pulse reads as coming from inside the pill. One layer covers both
+  approved ideas: the base lift is the depth vignette, the glow-scaled part
+  is the breathing.
+- Two feel fixes from live testing: cycle slowed 1.2s -> 1.8s ("a really
+  neat pace"), and the halo alpha floor raised 60 -> 120 because the dim
+  end of the breath took the ring fully invisible - it now breathes between
+  soft and bright without ever vanishing.
+
 ## 2026-08-24 — glow halo: reactive -> pulsating, icy white-blue (branch: streaming)
 
 - Three same-evening refinements, each approved live before the next: halo
