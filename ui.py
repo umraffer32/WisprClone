@@ -20,7 +20,7 @@ _BAR_RGB = (90, 200, 250)       # bright center of the bar gradient, and the glo
 _BAR_EDGE_RGB = (58, 118, 240)  # deeper blue the gradient falls to at the edges
 _ERR = "#c04040"
 _ALPHA = 0.65     # whole-pill translucency, Wispr-style (lower = more see-through)
-_W, _H, _RADIUS = 57, 28, 14
+_W, _H, _RADIUS = 64, 24, 12  # 57x28 clipped the Claude textbox; shorter + longer
 _PAD = 10  # transparent margin around the pill; the recording glow lives here
 _W_RESULT = 108  # wider: room for the checkmark, countdown, and dismiss X
 _NBARS = 10
@@ -246,11 +246,11 @@ class Pill:
             my = _PAD + _H / 2  # unscaled midline, for the hit-boxes
             cx = (_PAD + 30) * S
             if self._check_flashing:
-                d.ellipse((cx - 12 * S, m - 12 * S, cx + 12 * S, m + 12 * S),
+                d.ellipse((cx - 11 * S, m - 11 * S, cx + 11 * S, m + 11 * S),
                           fill=_BAR)
                 check_fill = "#ffffff"
             elif self._check_hover:
-                d.ellipse((cx - 12 * S, m - 12 * S, cx + 12 * S, m + 12 * S),
+                d.ellipse((cx - 11 * S, m - 11 * S, cx + 11 * S, m + 11 * S),
                           fill="#3a3a46")
                 check_fill = "#8edcff"
             else:

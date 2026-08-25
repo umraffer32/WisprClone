@@ -3,6 +3,14 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — pill resized 57x28 -> 64x24 (branch: streaming)
+
+- The pill's top edge was grazing the Claude textbox; the bottom edge is
+  pinned 60px above the screen bottom, so shortening it lowers the top.
+  Went shorter and longer per Uriah's ask, radius 14 -> 12 to stay a true
+  capsule. Verified against a phone playing a news clip at the mic: looks
+  good, textbox clear.
+
 ## 2026-08-24 — interior vignette and breathing tune (branch: streaming)
 
 - The flat #1e1e28 interior was the last dead layer; added a cold-blue
