@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 log = logging.getLogger("wisprclone")
 
 _BG = "#1e1e28"
-_BAR = "#34c759"
+_BAR = "#5ac8fa"
 _ERR = "#c04040"
 _ALPHA = 0.65     # whole-pill translucency, Wispr-style (lower = more see-through)
 _W, _H, _RADIUS = 57, 28, 14
@@ -211,7 +211,7 @@ class Pill:
             elif self._check_hover:
                 d.ellipse((cx - 12 * S, m - 12 * S, cx + 12 * S, m + 12 * S),
                           fill="#3a3a46")
-                check_fill = "#5fe08a"
+                check_fill = "#8edcff"
             else:
                 check_fill = _BAR
             pts = [(cx - 8 * S, m), (cx - 2 * S, m + 5 * S), (cx + 8 * S, m - 6 * S)]
@@ -296,7 +296,7 @@ def _icon_image():
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle((2, 2, 62, 62), radius=14, fill=(24, 26, 32, 255))
-    d.line((14, 18, 24, 48, 32, 26, 40, 48, 50, 18), fill=(52, 199, 89, 255),
+    d.line((14, 18, 24, 48, 32, 26, 40, 48, 50, 18), fill=(90, 200, 250, 255),
            width=7, joint="curve")
     return img
 

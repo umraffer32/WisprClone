@@ -3,6 +3,12 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — pill and tray go light blue (branch: streaming)
+
+- Swapped the green (#34c759) for light blue (#5ac8fa) on the recording
+  bars, the result checkmark (same constant), and the tray icon's waveform.
+  Pure preference: Uriah wanted to see it, then kept it.
+
 ## 2026-08-24 — polish goes mode-agnostic, gated by duration (branch: streaming)
 
 - The parked min_audio_s idea, implemented - but with the threshold question
