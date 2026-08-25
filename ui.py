@@ -10,15 +10,18 @@ import tkinter as tk
 
 import numpy as np
 import pystray
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 log = logging.getLogger("wisprclone")
 
 _BG = "#1e1e28"
 _BAR = "#5ac8fa"
+_BAR_RGB = (90, 200, 250)       # bright center of the bar gradient, and the glow
+_BAR_EDGE_RGB = (58, 118, 240)  # deeper blue the gradient falls to at the edges
 _ERR = "#c04040"
 _ALPHA = 0.65     # whole-pill translucency, Wispr-style (lower = more see-through)
 _W, _H, _RADIUS = 57, 28, 14
+_PAD = 10  # transparent margin around the pill; the recording glow lives here
 _W_RESULT = 108  # wider: room for the checkmark, countdown, and dismiss X
 _NBARS = 10
 _S = 4  # supersample factor: draw big, Lanczos down for antialiased edges
@@ -79,9 +82,9 @@ class Pill:
         root.overrideredirect(True)
         root.attributes("-topmost", True)
         self._w = _W
-        self._y = root.winfo_screenheight() - _H - 60
-        x = (root.winfo_screenwidth() - _W) // 2
-        root.geometry(f"{_W}x{_H}+{x}+{self._y}")
+        self._y = root.winfo_screenheight() - _H - 60 - _PAD
+        x = (root.winfo_screenwidth() - _W - 2 * _PAD) // 2
+        root.geometry(f"{_W + 2 * _PAD}x{_H + 2 * _PAD}+{x}+{self._y}")
         # NOACTIVATE means this click never steals focus from the app the
         # user wants to paste into - which is the whole point of the feature
         root.bind("<Button-1>", self._clicked)
@@ -93,6 +96,7 @@ class Pill:
         self._hwnd = None
         self._last_sig = None
         self.levels = collections.deque([0.0] * _NBARS, maxlen=_NBARS)
+        self._glow = 0.0  # smoothed voice level driving the recording halo
         self.visible = False
         self.flash_until = 0
         self._dismiss_box = None  # (x0, y0, x1, y1) hit-box, result state only
@@ -107,8 +111,8 @@ class Pill:
         if self._w == w:
             return
         self._w = w
-        x = (self.root.winfo_screenwidth() - w) // 2
-        self.root.geometry(f"{w}x{_H}+{x}+{self._y}")
+        x = (self.root.winfo_screenwidth() - w - 2 * _PAD) // 2
+        self.root.geometry(f"{w + 2 * _PAD}x{_H + 2 * _PAD}+{x}+{self._y}")
 
     @staticmethod
     def _in_box(x, y, box):
@@ -173,6 +177,7 @@ class Pill:
             self.root.withdraw()
             self.visible = False
         self.levels.extend([0.0] * _NBARS)
+        self._glow = 0.0
         self._x_hover = False
         self._x_dismissing = False
         self._check_hover = False
@@ -181,29 +186,45 @@ class Pill:
     def _render(self, state, level):
         """Draw one frame at _S x scale, downsample for antialiasing."""
         S = _S
-        w, h = self._w * S, _H * S
+        w, h = (self._w + 2 * _PAD) * S, (_H + 2 * _PAD) * S
+        pill = (_PAD * S, _PAD * S, (_PAD + self._w) * S - 1, (_PAD + _H) * S - 1)
         img = Image.new("RGBA", (w, h))
+        if state == "recording" and self._glow > 0.02:
+            # halo: the pill's own silhouette blurred into the padding,
+            # breathing with the smoothed voice level
+            gd = ImageDraw.Draw(img)
+            gd.rounded_rectangle(pill, radius=_RADIUS * S,
+                                 fill=_BAR_RGB + (int(70 + 150 * self._glow),))
+            img = img.filter(ImageFilter.GaussianBlur((2.5 + 3.5 * self._glow) * S))
         d = ImageDraw.Draw(img)
-        d.rounded_rectangle((0, 0, w - 1, h - 1), radius=_RADIUS * S,
+        d.rounded_rectangle(pill, radius=_RADIUS * S,
                             fill=_ERR if state == "error" else _BG)
         self._dismiss_box = None
         self._check_box = None
+        mid = h / 2
         if state == "recording":
             bw = (self._w - 2 * _RADIUS) * S / _NBARS
-            mid = h / 2
-            for i, lv in enumerate(self.levels):
-                x = _RADIUS * S + i * bw + bw / 2
+            recent = list(self.levels)[-(_NBARS // 2):]  # oldest..newest
+            for i in range(_NBARS):
+                ring = int(abs(i - (_NBARS - 1) / 2))  # 0 at center, 4 at edge
+                lv = recent[-(ring + 1)]  # newest audio center, aging outward
+                t = 1 - ring / (_NBARS // 2 - 1)  # deep blue edge -> light center
+                bright = 0.4 + 0.6 * min(1.0, lv)  # quiet dims, loud blooms
+                fill = tuple(int((e + (c - e) * t) * bright)
+                             for c, e in zip(_BAR_RGB, _BAR_EDGE_RGB)) + (255,)
+                x = (_PAD + _RADIUS) * S + i * bw + bw / 2
                 bh = max(1.5, lv * (_H - 10) / 2) * S
                 d.rounded_rectangle((x - S, mid - bh, x + S, mid + bh),
-                                    radius=S, fill=_BAR)
+                                    radius=S, fill=fill)
         elif state == "loading":
             d.text((w / 2, h / 2), "loading…", fill="#aaaaaa",
                    font=self._font, anchor="mm")
         elif state == "result":
             # click-to-repaste offer: checkmark, seconds-left countdown, and
             # an X to dismiss early instead of waiting out the countdown.
-            m = h / 2
-            cx = 30 * S
+            m = mid
+            my = _PAD + _H / 2  # unscaled midline, for the hit-boxes
+            cx = (_PAD + 30) * S
             if self._check_flashing:
                 d.ellipse((cx - 12 * S, m - 12 * S, cx + 12 * S, m + 12 * S),
                           fill=_BAR)
@@ -219,10 +240,10 @@ class Pill:
             for px, py in (pts[0], pts[-1]):  # round caps
                 d.ellipse((px - 1.5 * S, py - 1.5 * S, px + 1.5 * S, py + 1.5 * S),
                           fill=check_fill)
-            self._check_box = (30 - 12, _H / 2 - 12, 30 + 12, _H / 2 + 12)
-            d.text((58 * S, m), str(max(1, math.ceil(level))), fill="#aaaaaa",
-                   font=self._font_count, anchor="mm")
-            xx = (self._w - _RADIUS - 8) * S
+            self._check_box = (_PAD + 30 - 12, my - 12, _PAD + 30 + 12, my + 12)
+            d.text(((_PAD + 58) * S, m), str(max(1, math.ceil(level))),
+                   fill="#aaaaaa", font=self._font_count, anchor="mm")
+            xx = (_PAD + self._w - _RADIUS - 8) * S
             if self._x_dismissing:
                 d.ellipse((xx - 10 * S, m - 10 * S, xx + 10 * S, m + 10 * S),
                           fill=_ERR)
@@ -237,12 +258,12 @@ class Pill:
                    fill=x_fill, width=2 * S)
             d.line((xx - 5 * S, m + 5 * S, xx + 5 * S, m - 5 * S),
                    fill=x_fill, width=2 * S)
-            self._dismiss_box = (self._w - _RADIUS - 18, _H / 2 - 10,
-                                 self._w - _RADIUS + 2, _H / 2 + 10)
+            self._dismiss_box = (_PAD + self._w - _RADIUS - 18, my - 10,
+                                 _PAD + self._w - _RADIUS + 2, my + 10)
         elif state == "error":
             d.text((w / 2, h / 2), "error", fill="white",
                    font=self._font, anchor="mm")
-        return img.resize((self._w, _H), Image.LANCZOS)
+        return img.resize((self._w + 2 * _PAD, _H + 2 * _PAD), Image.LANCZOS)
 
     def _push_frame(self, img):
         """Blit an RGBA frame to the layered window (premultiplied BGRA)."""
@@ -282,8 +303,13 @@ class Pill:
         self._resize(_W_RESULT if state == "result" else _W)
         self._show()
         if state == "recording":
-            self.levels.append(min(1.0, level * 12))
-        sig = (state, self._w, tuple(self.levels),
+            # x24: sized so a normal voice at ~2.5ft on this quiet mic drives
+            # the mid-range; the pill sees raw level, normalize_peak doesn't
+            # apply until transcription
+            lv = min(1.0, level * 24)
+            self.levels.append(lv)
+            self._glow = 0.75 * self._glow + 0.25 * lv
+        sig = (state, self._w, tuple(self.levels), round(self._glow, 2),
                max(1, math.ceil(level)) if state == "result" else 0,
                self._x_hover, self._x_dismissing,
                self._check_hover, self._check_flashing)

@@ -3,6 +3,19 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-24 — pill recording animation overhaul (branch: streaming)
+
+- Four effects added in one pass at Uriah's "fuck it, add all four": a
+  voice-breathing glow halo (the pill window gained a 10px transparent
+  margin for it; per-pixel alpha made this possible), center-out symmetric
+  waveform replacing the left-to-right scroll, a center-to-edge blue
+  gradient on the bars, and loudness-reactive brightness (quiet dims, loud
+  blooms). Worst-case frame measured 2.8ms against the 33ms tick budget.
+- Level multiplier doubled (12 -> 24) after live testing at his normal
+  2.5ft distance: the pill shows raw mic level (normalize_peak only applies
+  at transcription), and the quiet mic kept the animation near the floor
+  unless he leaned in. Verdict at normal distance after the bump: keeper.
+
 ## 2026-08-24 — pill and tray go light blue (branch: streaming)
 
 - Swapped the green (#34c759) for light blue (#5ac8fa) on the recording
