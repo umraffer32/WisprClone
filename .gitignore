@@ -7,4 +7,5 @@ pill_pos.txt
 corrections.txt
 emphasis_words.txt
 WisprClone.lnk.startup-backup
-uia_probe.py
+retained_audio/
+.claude/worktrees/

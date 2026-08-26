@@ -67,3 +67,15 @@ a failed polish must never lose a dictation). Always address it as
 - Config knobs belong in config.toml; internal sanity thresholds stay in code.
 - clean_text() regexes are one-quirk-per-pattern; check the polish pass before
   adding another.
+- Writing or modifying code in this repo goes to a Fable agent, not written
+  directly in the main chat. Main chat (Sonnet) still scopes the work,
+  reviews the result, and handles git. Decided 2026-08-26 after Fable
+  outperformed on both the SleepWatcher diagnosis and a code-plan critique.
+  Always dispatch at max effort - there's no effort parameter on the Agent
+  tool itself, so this means explicitly telling the agent in its prompt to
+  work at maximum reasoning depth, not the default pass. Also pair every
+  such dispatch with a ~60s Monitor heartbeat that digests real progress
+  (files touched, commands run, the agent's last note-to-self - never raw
+  transcript dumped verbatim) and relay each one as 2-3 plain sentences of
+  what it's actually doing, not just "still working." Stop the heartbeat
+  the moment the real completion notice arrives.
