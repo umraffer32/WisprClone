@@ -10,6 +10,7 @@ import struct
 import sys
 import threading
 import time
+import wave
 from datetime import datetime
 from pathlib import Path
 
@@ -442,6 +443,12 @@ class Transcriber(threading.Thread):
         self.continuation_gap_s = cfg["paste"]["continuation_gap_s"]
         self.normalize_peak = cfg["audio"]["normalize_peak"]
         self.polish_cfg = cfg["polish"]
+        # Temporary experiment data (streaming Phase A), not a feature: each
+        # dictation's audio is kept so mine_merge_rule.py can replay the
+        # chunked pipeline offline. Goes away with the shadow; config.toml's
+        # [retain] comment says how to clear it out.
+        self.retain_dir = base_dir / cfg["retain"]["dir"]
+        self.retain_mb = cfg["retain"]["max_mb"]
         # sentence-continuity tracking: the last paste's window, tail (its
         # final chars, whitespace-normalized, for matching against the
         # focused field's UIA text), and end-punctuation state, so a
@@ -576,6 +583,33 @@ class Transcriber(threading.Thread):
             self.status.flash_error = True
             return text, "error"
 
+    def _retain_audio(self, audio, now):
+        """Saves the exact audio the shadow VAD saw (post-trim,
+        post-normalize) so the logged segment bounds line up with the WAV
+        sample-for-sample. Returns the filename for the shadow record's
+        "wav" field, or None when retention is disabled. Prunes oldest-first
+        past the cap; the name sorts chronologically, which is what makes
+        the sort below a time order."""
+        if not self.retain_mb:
+            return None
+        self.retain_dir.mkdir(exist_ok=True)
+        name = f"{now:%Y%m%d_%H%M%S}.wav"
+        n = 0
+        while (self.retain_dir / name).exists():  # two jobs in one second
+            n += 1
+            name = f"{now:%Y%m%d_%H%M%S}_{n}.wav"
+        with wave.open(str(self.retain_dir / name), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes((np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16).tobytes())
+        wavs = sorted(self.retain_dir.glob("*.wav"))
+        total = sum(p.stat().st_size for p in wavs)
+        while len(wavs) > 1 and total > self.retain_mb * 1_000_000:
+            total -= wavs[0].stat().st_size
+            wavs.pop(0).unlink()
+        return name
+
     def run(self):
         self._load_word_counts()
         try:
@@ -681,10 +715,18 @@ class Transcriber(threading.Thread):
                                  len(s700), s700[-1][1] - s700[-1][0] if s700 else 0,
                                  max((e - s for s, e in s700), default=0),
                                  len(audio) / 16000 - speech, time.monotonic() - t3)
-                        rec = {"ts": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+                        now = datetime.now()
+                        # own try: a full disk must not cost the shadow record
+                        wav = None
+                        try:
+                            wav = self._retain_audio(audio, now)
+                        except Exception:
+                            log.exception("audio retention failed")
+                        rec = {"ts": f"{now:%Y-%m-%d %H:%M:%S}",
                                "mode": job["mode"], "audio_s": round(len(audio) / 16000, 1),
                                "whisper_s": round(t1 - t0, 2), "polish_s": round(t2 - t1, 2),
                                "chars": len(text), "shadow_s": round(time.monotonic() - t3, 2),
+                               "wav": wav,
                                "segs": {str(ms): [list(b) for b in bs] for ms, bs in segs.items()}}
                         with open(self.base_dir / "vad_shadow.log", "a", encoding="utf-8") as f:
                             f.write(json.dumps(rec) + "\n")

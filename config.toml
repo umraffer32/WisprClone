@@ -63,6 +63,20 @@ timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
 min_ratio = 0.4         # reject the polish result outside [min_ratio, max_ratio]
 max_ratio = 2.5         # of the original length - likely means the model misbehaved
 
+[retain]
+# Temporary experiment data for the streaming merge-rule decision, not a
+# feature: every dictation's audio is saved post-paste (same
+# non-interference slot as the vad shadow) so mine_merge_rule.py can replay
+# the chunked streaming pipeline offline against the full-clip transcript.
+# WAV names match vad_shadow.log's "wav" field. Once the merge rule is
+# decided: set max_mb = 0 and delete the directory.
+dir = "retained_audio"  # gitignored
+max_mb = 1000  # hard cap on the directory; oldest WAVs pruned first.
+               # 16kHz mono int16 is ~2MB per minute of speech, so a heavy
+               # hour-a-day week is ~800MB - the cap should outlast the
+               # collection week, or pruning eats its earliest days.
+               # 0 disables retention entirely.
+
 [files]
 corrections = "corrections.txt"
 emphasis_words = "emphasis_words.txt"
