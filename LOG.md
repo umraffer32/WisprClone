@@ -3,6 +3,30 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-26 — Job log now records why polish left text unchanged
+
+Was asked whether a specific dictation's missing commas meant polish did a
+bad job. Digging into `wisprclone.log` turned up a real ambiguity: a job
+where polish ran and genuinely decided no edit was needed looks identical
+in the log to one where polish silently failed (timeout, exception) and
+fell back to raw - both just show `raw == text`, with the actual cause
+buried in a separate ERROR/WARNING line that has to be timestamp-matched
+back to the job by hand.
+
+Mined the full log (687 jobs, 272 with polish gated in) to check a
+hypothesis that long dictations make polish more conservative - the data
+said the opposite (58% edit rate under 15s, up to 83% over 40s). But the
+ten longest zero-edit dictations included two real hidden failures: a
+183.8s dictation that hit an unhandled exception, and a 106.1s one that
+timed out at the configured 30s ceiling. A third, 130.1s, had no error at
+all - polish ran clean and just declined to punctuate a 78s continuous
+speech segment.
+
+Fix: `_polish()` now returns `(text, status)` instead of bare text, and
+the job log line carries `polish_status=` (`ok`, `skipped`, `suspicious`,
+`dropped_question`, `timeout`, `error`). No more cross-referencing
+timestamps to tell a real no-op from a swallowed failure.
+
 ## 2026-08-25 — Stammer cleanup: exact-repeat rule shipped, diverging-restart rule pulled
 
 Noticed polish was leaving real stammers untouched ("there were, there was

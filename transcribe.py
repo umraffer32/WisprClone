@@ -536,7 +536,10 @@ class Transcriber(threading.Thread):
         """LLM cleanup for rambling toggle-mode dictations - false starts,
         run-on sentences. Any failure (Ollama down, timeout, suspicious
         output length) falls back to the raw transcript rather than risk
-        losing or corrupting the dictation."""
+        losing or corrupting the dictation. Returns (text, status); status
+        distinguishes a real no-edit-needed pass ("ok") from a fallback
+        ("timeout"/"error"/etc.) since both look identical in the pasted
+        text - the job log line is where the difference has to show up."""
         p = self.polish_cfg
         try:
             # 127.0.0.1, NOT localhost: Windows tries IPv6 ::1 first and eats
@@ -555,23 +558,23 @@ class Transcriber(threading.Thread):
             ratio = len(polished) / max(1, len(text))
             if not polished or not (p["min_ratio"] <= ratio <= p["max_ratio"]):
                 log.warning("polish output length suspicious (ratio %.2f), using raw", ratio)
-                return text
+                return text, "suspicious"
             if polished.count("?") < text.count("?"):
                 # a dropped short question passes the ratio guard easily
                 log.warning("polish dropped a question, using raw")
-                return text
-            return polished
+                return text, "dropped_question"
+            return polished, "ok"
         except requests.Timeout:
             log.exception("polish timed out, using raw text")
             # a post-eviction cold model load is the likely cause; re-warm in
             # the background so the next dictation gets polished
             threading.Thread(target=self._warm_polish, daemon=True).start()
             self.status.flash_error = True
-            return text
+            return text, "timeout"
         except Exception:
             log.exception("polish pass failed, using raw text")
             self.status.flash_error = True
-            return text
+            return text, "error"
 
     def run(self):
         self._load_word_counts()
@@ -610,15 +613,16 @@ class Transcriber(threading.Thread):
                 # duration decides polish, not which hotkey started the
                 # recording - short bursts stay instant, anything longer
                 # gets cleaned regardless of mode
+                polish_status = "skipped"
                 if (self.polish_cfg["enabled"]
                         and len(audio) / 16000 >= self.polish_cfg["min_audio_s"]):
                     raw = text
-                    text = self._polish(text)
+                    text, polish_status = self._polish(text)
                     if text != raw:
                         log.info("polish changed text:\n  raw: %s\n  out: %s", raw, text)
                 t2 = time.monotonic()
-                log.info("job: audio=%.1fs whisper=%.2fs polish=%.2fs mode=%s",
-                         len(audio) / 16000, t1 - t0, t2 - t1, job["mode"])
+                log.info("job: audio=%.1fs whisper=%.2fs polish=%.2fs mode=%s polish_status=%s",
+                         len(audio) / 16000, t1 - t0, t2 - t1, job["mode"], polish_status)
                 self.status.last_text = text
                 self.status.add_words(text)
                 with open(self.history, "a", encoding="utf-8") as f:
