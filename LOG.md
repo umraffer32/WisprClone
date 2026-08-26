@@ -3,6 +3,62 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-26 — Polish diff audit script; the swear-preservation fix isn't fully holding
+
+Second of the three "mine WisprClone's own logs" passes planned back on
+2026-08-23 (`mine_vocab.py` was the first, already shipped). Built
+`mine_polish.py`, a sibling in the same plain-functions/summary-table style
+as `mine_streaming.py`: parses every `polish changed text` raw/out pair in
+`wisprclone.log` plus every job's `polish_status`, flags anything that looks
+like a hard-rule violation (dropped question, dropped swear, sentence-count
+drop, a length ratio outside a normal band), and profiles residual filler
+that reaches polish uncaught by `clean_text()`.
+
+First real run (180 pairs) found the 2026-08-25 swear-preservation fix -
+previously logged as RESOLVED - isn't fully holding: 4 dropped "fuck", 4
+dropped "shit", 1 dropped "damn", including one the same morning this audit
+ran. The earlier 3-dictation live spot-check that looked clean wasn't
+representative of the real rate. Decided not to chase it further for now -
+low frequency on words rarely used, and live-verified in the same session
+that plenty of real swears do survive intact today. Revisit only if it
+actually costs something real. Also found: "you know" reaches polish
+uncaught 24 times across 14 dictations (by design - the regex only strips
+the comma-flanked form), zero missed stutters or um/uh leakage otherwise.
+3 dropped-question cases, all traced to the old qwen model, not current.
+
+## 2026-08-26 — Streaming merge-rule experiment: audio retention + offline simulator
+
+The Phase A shadow (2026-08-24) answered which pause threshold to use.
+The next open question - the "merge rule" for a short trailing chunk at the
+end of a dictation, the one case that sits on streaming's felt-latency path
+- needed real audio, not just segment bounds, since Whisper's accuracy on
+an isolated short clip can't be judged from timing data alone.
+
+Extended the shadow pass to also retain each dictation's audio (same
+post-paste, non-interference slot; own try/except so a full disk can't cost
+the shadow record), gitignored, capped at 1000MB with oldest-first pruning
+(`[retain]` in config.toml). Added `mine_merge_rule.py`: replays the
+500ms-threshold chunking three ways for a short tail (bare, given the
+previous chunk's text as a prompt, or re-merged with the previous chunk's
+audio), scores each against a freshly-regenerated full-clip transcript via
+word-level alignment, and flags join-punctuation and clipping artifacts.
+
+This is temporary experiment data, not a feature - `config.toml`'s comment
+says how to clear it out once the merge rule is decided. Collecting now
+against real usage plus a handful of deliberately-shaped test dictations.
+
+## 2026-08-26 — Standing convention: code changes go to a Fable agent
+
+Code writing/modification in this repo now goes to a Fable agent (max
+effort, always spelled out explicitly since the Agent tool has no effort
+parameter), not written directly in the main chat - Fable outperformed on
+both an independent SleepWatcher diagnosis and a critique of a Sonnet-
+authored test plan (the merge-rule plan above, in fact - the first version
+had a real flaw a second pass caught). Main chat still scopes the work,
+reviews the result, and handles git. Every such dispatch runs in an
+isolated git worktree and gets a ~60s Monitor heartbeat digesting real
+progress, not just a liveness ping.
+
 ## 2026-08-26 — Job log now records why polish left text unchanged
 
 Was asked whether a specific dictation's missing commas meant polish did a
