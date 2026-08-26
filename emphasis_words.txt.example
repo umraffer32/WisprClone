@@ -1,0 +1,9 @@
+# One word per line. A word here is never collapsed by the stutter-cleanup
+# regex, comma or not - use it for words you personally double on purpose
+# for emphasis ("this is very, very good").
+#
+# Copy this file to emphasis_words.txt and fill it in with your own words.
+# emphasis_words.txt is gitignored on purpose, same as corrections.txt.
+very
+really
+no

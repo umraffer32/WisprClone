@@ -65,4 +65,5 @@ max_ratio = 2.5         # of the original length - likely means the model misbeh
 
 [files]
 corrections = "corrections.txt"
+emphasis_words = "emphasis_words.txt"
 history = "history.log"

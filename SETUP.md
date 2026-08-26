@@ -67,6 +67,16 @@ Copy-Item corrections.txt.example corrections.txt
 
 Each line is `wrong=right`, whole-word and case-insensitive, applied live with no restart needed. This file isn't required — if it's missing, the app just runs without any corrections (the read is wrapped in a try/except that silently continues) — but it's the fastest way to fix a mishearing you notice recurring. It's gitignored on purpose, since it fills up with your own name and vocabulary, not general-purpose content.
 
+## Personalizing emphasis_words.txt
+
+The regex cleanup step collapses an immediate repeated word ("the the mic" -> "the mic"), which also means it'll eat a word you doubled on purpose for emphasis ("this is very, very good") unless Whisper happens to punctuate your pause with a comma. Same setup as corrections.txt:
+
+```powershell
+Copy-Item emphasis_words.txt.example emphasis_words.txt
+```
+
+One word per line. Anything on this list is never collapsed, comma or not. Also optional, also gitignored, also applied live.
+
 ## RUNASADMIN — reaching elevated windows
 
 Some apps you might dictate into (an elevated terminal, an installer) run elevated themselves, and Windows won't deliver keyboard/mouse input from a non-elevated process into an elevated one. WisprClone needs to run elevated too, or dictation just silently won't reach those windows.

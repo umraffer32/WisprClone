@@ -3,6 +3,47 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-25 — Stammer cleanup: exact-repeat rule shipped, diverging-restart rule pulled
+
+Noticed polish was leaving real stammers untouched ("there were, there was
+a mining thing" pasted exactly as said). Three fixes, tested live against
+real dictations before landing:
+
+- **Exact-repeat stammers now get cleaned by polish.** Added a rule +
+  worked example to `POLISH_PROMPT` naming the pattern directly ("there
+  were, there was" -> "there was"), since the existing abstract "false
+  start" wording wasn't concrete enough for dolphin-mistral to act on
+  reliably. Verified live across several real dictations, consistent
+  every time.
+- **The stutter-collapse regex (`_STUTTER`) no longer eats intentional
+  emphasis.** It used to collapse any doubled word unconditionally ("very,
+  very important" -> "very important"), silently, no log trail. Now it
+  only collapses a bare repeat with no comma between the words - a comma
+  is Whisper's own signal that the speaker paused before repeating on
+  purpose. Verified live: "saw saw" still collapses, "very, very
+  important" now survives.
+- **New `emphasis_words.txt`** (gitignored, same pattern as
+  `corrections.txt`, `.example` template committed): words on this list
+  are never collapsed by `_STUTTER`, comma or not. Closes the residual gap
+  the comma-heuristic can't cover - fast, no-pause emphasis ("very very
+  important" said quickly). Seeded with very/really/no and verified live.
+
+**Known bug, still in tuning, NOT committed:** a second prompt rule meant
+to also catch a *diverging*-wording restart ("I want to grab, I want to
+get the keys" -> "I want to get the keys", first attempt abandoned
+incomplete) tested clean 3/3 offline on short text, but failed on a real,
+longer live dictation - polish left it completely untouched with no log
+trail. Re-running the exact real sentence 4 more times offline gave a
+third, different, still-wrong result each time ("I was going, hoping..."
+- drops just the word "I", never the full phrase). Same root cause as the
+temperature-0 finding from the profanity work: GPU float non-determinism
+means temp 0 isn't truly deterministic on near-tied logits, and this
+sentence lands in that territory - the model's confidence is split three
+ways (full removal, partial removal, no change) with no reliable winner.
+Not harmful (worst case is a no-op or a partial edit, never corruption),
+just not solid enough to ship. Reverted out of `POLISH_PROMPT` for now;
+the exact-repeat rule above is unaffected and stays in.
+
 ## 2026-08-25 — Decided against a public release
 
 Compared WisprClone directly against Handy (github.com/cjpais/Handy), the

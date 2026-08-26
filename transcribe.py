@@ -36,7 +36,10 @@ POLISH_PROMPT = (
     "- Remove filler words (um, uh, you know, like) and immediate word "
     "stutters.\n"
     "- Remove a false start only when the speaker immediately restarts the "
-    "same sentence.\n"
+    "same sentence. This includes repeated-word stammers like 'there were, "
+    "there was' or 'I think was it, was it' - keep only the final, complete "
+    "version of the restarted phrase.\n"
+    "  Example: 'there were, there was a thing' -> 'there was a thing'.\n"
     "- Fix punctuation and obvious grammar slips.\n"
     "Hard rules:\n"
     "- Add nothing: never append words the speaker did not say, and never "
@@ -45,10 +48,11 @@ POLISH_PROMPT = (
     "must appear as a sentence in the output.\n"
     "- A question must remain a question.\n"
     "- Keep the speaker's own wording; do not paraphrase, summarize, or "
-    "improve style.\n"
+    "improve style. Removing a stammered restart is not paraphrasing.\n"
     "- Preserve all profanity and swear words exactly as spoken - never "
     "remove, replace, or soften them.\n"
-    "- If unsure about an edit, leave that part unchanged.\n"
+    "- If unsure whether something is a stammer vs. intentional repetition, "
+    "leave it unchanged.\n"
     "Output only the cleaned text - no preamble, no quotes, no "
     "explanation.\n\nText: "
 )
@@ -100,10 +104,14 @@ _FILLER = re.compile(r",?\s*(?<![\w-])(?:um+|uh+|erm|hmm+)(?![\w-]),?\s*", re.IG
 # either side is left alone - misses some filler uses, but a false strip
 # ("do you know" -> "do") is worse than a miss.
 _YOU_KNOW = re.compile(r",\s*you know\s*,?|(?<![\w-])you know\s*,", re.IGNORECASE)
-# Collapses an immediate stutter ("I I think", "the, the box" -> "I think",
+# Collapses an immediate stutter ("I I think", "the the box" -> "I think",
 # "the box"). Keeps the first occurrence's own casing via the backreference.
-# Trade-off: also collapses deliberate repetition ("no, no, no!" -> "no!").
-_STUTTER = re.compile(r"\b(\w+)(?:[,\s]+\1\b)+", re.IGNORECASE)
+# No comma allowed between repeats on purpose: a comma is Whisper's own
+# signal of a spoken pause, which is how deliberate emphasis ("very, very
+# important") differs from a real stutter (words run together, no pause).
+# Residual trade-off: fast, no-pause emphasis ("very very important") still
+# collapses, since there's no punctuation to tell it apart from a stutter.
+_STUTTER = re.compile(r"\b(\w+)(?:\s+\1\b)+", re.IGNORECASE)
 # Drops a leading "and" that starts a sentence ("And I went" -> "I went"),
 # keeping whatever anchored the match (start of text, or ". ") so the next
 # word still gets capitalized below. "and" mid-sentence is left alone - it's
@@ -240,10 +248,24 @@ class Status:
         return self._transcribing
 
 
-def clean_text(text, corrections_path):
+def clean_text(text, corrections_path, emphasis_path):
     text = _FILLER.sub(" ", text)  # single space, collapsed below
     text = _YOU_KNOW.sub(" ", text)
-    text = _STUTTER.sub(r"\1", text)
+    # emphasis_words.txt is re-read each job, same as corrections.txt, so a
+    # word added mid-session takes effect without a restart. A word on this
+    # list is never collapsed by _STUTTER, comma or not - the speaker said
+    # outright that this word gets doubled on purpose.
+    protected = set()
+    try:
+        for line in Path(emphasis_path).read_text(encoding="utf-8").splitlines():
+            word = line.strip()
+            if word and not word.startswith("#"):
+                protected.add(word.lower())
+    except OSError:
+        pass
+    text = _STUTTER.sub(
+        lambda m: m.group(0) if m.group(1).lower() in protected else m.group(1),
+        text)
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"\s+([.,!?;])", r"\1", text)
     text = _LEADING_AND.sub(lambda m: m.group(1), text)
@@ -411,6 +433,7 @@ class Transcriber(threading.Thread):
         self.status = status
         self.clipboard = Clipboard(cfg)
         self.corrections = base_dir / cfg["files"]["corrections"]
+        self.emphasis_words = base_dir / cfg["files"]["emphasis_words"]
         self.history = base_dir / cfg["files"]["history"]
         self.model = None
         self.cpu_model = None
@@ -580,7 +603,7 @@ class Transcriber(threading.Thread):
                 segments = self._transcribe(audio)
                 text = " ".join(s.text.strip() for s in segments
                                 if s.no_speech_prob < 0.6)
-                text = clean_text(text, self.corrections)
+                text = clean_text(text, self.corrections, self.emphasis_words)
                 if not text:
                     continue  # silence/hallucination: paste nothing
                 t1 = time.monotonic()
@@ -690,4 +713,5 @@ if __name__ == "__main__":
     start = time.monotonic()
     segments = t._transcribe(audio)
     text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.6)
-    print(f"transcribed in {time.monotonic() - start:.2f}s: {clean_text(text, t.corrections)!r}")
+    print(f"transcribed in {time.monotonic() - start:.2f}s: "
+          f"{clean_text(text, t.corrections, t.emphasis_words)!r}")
