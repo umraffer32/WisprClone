@@ -3,6 +3,27 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-26 — Decided against a public release
+
+Compared WisprClone directly against Handy (github.com/cjpais/Handy), the
+most popular free Wispr Flow alternative: 30k+ GitHub stars, MIT, Rust/Tauri,
+100+ contributors, signed installer, cross-platform, 69-model catalog, its
+own test suite. The gaps between this repo and a real public release
+(packaging, model auto-download, GPU auto-detection, cross-platform support,
+tests) are exactly what Handy already has, built by a team over years, not
+something a solo project closes by iterating further. Decided to stop
+treating public release as a goal and keep this as a personal tool /
+portfolio piece instead. README.md's Scope section, SETUP.md's intro, and
+CLAUDE.md were all updated to reflect that framing.
+
+This doesn't roll back anything already built. The comparison also surfaced
+that a few pieces here (mouse-button push-to-talk via a Win32 hook, CUDA
+transcription, the local-by-default polish pass with its correctness
+guardrails, Clipboard History exclusion, UIA continuation stitching) don't
+have an equivalent in Handy at all — worth remembering if either the
+clipboard-exclusion or continuation-stitching idea is ever worth upstreaming
+as a PR to Handy itself, separate from running a release of this repo.
+
 ## 2026-08-25 — UIA continuation stitching, polish swapped to dolphin-mistral (branch: streaming)
 
 - Researched how Wispr Flow solves the "no period between short dictations"

@@ -6,6 +6,12 @@ Tap Right Ctrl to toggle long-form recording. Dictations over min_audio_s
 (either mode) also get an LLM polish pass through a local Ollama model.
 Everything runs on this machine; no dictation audio or text leaves it.
 
+Personal tool, not a planned public release (see README.md's Scope section —
+weighed against Handy, the most popular free Wispr Flow alternative, and
+decided against chasing packaging/cross-platform/installer work). Treat this
+as a portfolio piece: don't propose packaging, installers, or general-audience
+onboarding work unless explicitly asked.
+
 ## Files
 
 - `wisprclone.py` — entry point: single-instance mutex, StateMachine, input
