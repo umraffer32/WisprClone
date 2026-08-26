@@ -30,12 +30,21 @@ onboarding work unless explicitly asked.
   (comma or not), one per line, applied live (no restart).
 - `history.log` — every pasted dictation, timestamped. Seeds the tray word
   counter. `wisprclone.log` (1MB rotating) holds diagnostics and per-job
-  timing lines (`job: audio=… whisper=… polish=… mode=…`) plus raw/polished
-  diffs whenever polish changes text.
+  timing lines (`job: audio=… whisper=… polish=… mode=… polish_status=…`)
+  plus raw/polished diffs whenever polish changes text.
 - `vad_shadow.log` — streaming-branch diagnostic only: one JSON line per
   dictation with the Silero segment bounds streaming would have used
-  (500/700/1000ms candidates). Gitignored via `*.log`; goes away with the
-  shadow when real streaming lands.
+  (300/400/500/700/1000ms candidates). Gitignored via `*.log`; goes away
+  with the shadow when real streaming lands.
+- `retained_audio/` — temporary experiment data for the streaming merge-rule
+  decision, not a feature: each dictation's audio, capped and auto-pruned
+  (`[retain]` in config.toml). Gitignored; see that section's comment for
+  how to clear it out once the merge rule is decided.
+- `mine_vocab.py` / `mine_streaming.py` / `mine_merge_rule.py` /
+  `mine_polish.py` — offline analysis scripts over the logs above: personal
+  vocabulary → Whisper hotwords, the streaming pause-threshold pick, the
+  merge-rule simulation, and a polish-quality/filler audit. Run by hand,
+  summary output only.
 
 ## Launching and restarting — read before touching a running instance
 
@@ -64,10 +73,16 @@ a failed polish must never lose a dictation). Always address it as
 
 - Append an entry to LOG.md with any meaningful commit: what changed and why,
   including testing results and reversals. Decision-level, not diff narration.
+- Keep commit messages short: one imperative line by default, or up to a
+  couple one-sentence bullets if a commit genuinely bundles multiple
+  changes. Never a paragraph-plus-sub-bullets per file - that detail goes
+  in LOG.md, not the commit body. Reinforced 2026-08-26 after drifting into
+  exactly that on three same-day commits.
 - Config knobs belong in config.toml; internal sanity thresholds stay in code.
 - clean_text() regexes are one-quirk-per-pattern; check the polish pass before
   adding another.
-- Writing or modifying code in this repo goes to a Fable agent, not written
+- Writing or modifying code in this repo goes to a Fable agent, dispatched
+  in an isolated git worktree (`isolation: "worktree"`), not written
   directly in the main chat. Main chat (Sonnet) still scopes the work,
   reviews the result, and handles git. Decided 2026-08-26 after Fable
   outperformed on both the SleepWatcher diagnosis and a code-plan critique.
@@ -79,3 +94,12 @@ a failed polish must never lose a dictation). Always address it as
   transcript dumped verbatim) and relay each one as 2-3 plain sentences of
   what it's actually doing, not just "still working." Stop the heartbeat
   the moment the real completion notice arrives.
+- Before pushing any commit, check whether it makes a doc stale - CLAUDE.md,
+  README.md, SETUP.md, or a comment elsewhere - and fix it in the same push,
+  not a later cleanup pass. Decided 2026-08-26 after a repo-wide review
+  found 8 real doc/code mismatches that had accumulated over one day's
+  commits (a new script missing from CLAUDE.md's Files list, a stale model
+  name in SETUP.md, a README claim a later commit made false, etc.). The
+  goal is that docs are never something Uriah has to separately worry about
+  or schedule an audit for - consistency is a property of every push, not a
+  periodic cleanup task.

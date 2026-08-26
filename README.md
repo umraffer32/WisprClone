@@ -6,7 +6,7 @@ I built it after hitting Wispr Flow's free-tier limit and deciding a monthly sub
 
 ## What it does
 
-Press and hold the mouse's back button (or a configured key) to record, release to transcribe and paste. A quick double-tap of Right Ctrl switches into toggle mode instead, for longer dictation where holding a button down isn't practical.
+Press and hold the mouse's back button (or a configured key) to record, release to transcribe and paste. A quick tap of Right Ctrl switches into toggle mode instead, for longer dictation where holding a button down isn't practical.
 
 While recording, a small translucent pill appears at the bottom of the screen showing a live level meter. If a paste probably missed its target, no visible text caret and no editable control has focus, the pill instead offers a click-to-repaste checkmark with a countdown, plus an X to dismiss it early. Both have hover and click feedback built in.
 
@@ -32,6 +32,8 @@ Nothing shares mutable state without a clear owner: the audio buffer belongs to 
 
 **Guessing whether a paste landed.** There's no OS signal for "the paste worked." Instead, after pasting, the app checks for a visible system text caret and, for apps that draw their own (Electron, Chromium), asks UI Automation whether the focused control is actually an editable field. Only when both come back negative does the repaste offer appear.
 
+**Bridging separate dictations without a fixed timer.** Whether to glue a new dictation onto the previous one (a period, then a space) instead of treating it as a fresh thought needs ground truth, not a guess. After pasting, the app reads the focused field's actual text back through UI Automation; if it still ends with the previous paste's tail and that paste had no closing punctuation, it stitches on. A field that clears, gets sent, or gets hand-edited simply fails that check and starts fresh. Only when a field exposes no readable text at all (some apps don't implement the UIA text patterns) does it fall back to a blind same-window-within-a-few-seconds heuristic, and a terminal never stitches, since a stray period there would corrupt a command.
+
 **GPU with a real fallback, not just a try/except.** The model loads on CUDA if available and falls back to CPU on failure. A failure counter latches to CPU after repeated GPU failures within a session, so a flaky driver doesn't retry and fail on every single transcription.
 
 **A mic that skips the open latency between uses.** The audio stream doesn't reopen on every press, because opening a device takes 50-300ms, long enough to clip the first word of an utterance and stall the input hook while it waits. A short pre-roll buffer also captures the moment just before the button is pressed so speech doesn't get cut off. It's not permanently open, though: mine releases the mic after 10 seconds of no dictation so Windows' mic-in-use indicator doesn't stay lit all day, and the first syllable after it reopens can clip, a documented tradeoff. That idle timeout can be set to 0 for a genuinely always-hot mic if the clip matters more to you than the indicator. If the mic isn't there yet at launch, say the app starts at login before a USB mic has enumerated, that open failure is caught instead of taking the whole app down before the tray icon even exists. The stale-stream watchdog picks it up and retries a few seconds later.
@@ -40,16 +42,16 @@ Nothing shares mutable state without a clear owner: the audio buffer belongs to 
 
 ## Things I tried and reversed
 
-Early versions ran an LLM polish pass over toggle-mode dictation through a local Ollama model, and separately tried bridging punctuation across consecutive dictations in the same window. The first cut of the polish pass got removed entirely, code and Ollama dependency both, once it turned out to add latency for a wording improvement I didn't actually want most of the time. It's back now (see [SETUP.md](SETUP.md) for the how and why), running through a different model with the latency problem actually fixed, though the prompt and its guardrails are still being tuned as I use it day to day. The punctuation bridging stayed in the code but got turned off by default: it glued together enough unrelated messages in normal chat-style use that the false-positive rate wasn't worth what it fixed. Both are visible in git history if you want to see the actual back-and-forth.
+Early versions ran an LLM polish pass over toggle-mode dictation through a local Ollama model, and separately bridged punctuation across consecutive dictations purely on a timer. The first cut of the polish pass got removed entirely, code and Ollama dependency both, once it turned out to add latency for a wording improvement I didn't actually want most of the time. It's back now (see [SETUP.md](SETUP.md) for the how and why), running through a different model with the latency problem actually fixed, though the prompt and its guardrails are still being tuned as I use it day to day. The timer-only bridging got turned off by default early on: it glued together enough unrelated messages in normal chat-style use that the false-positive rate wasn't worth what it fixed. It's back too, now driven by the UI Automation field-read described above instead of a blind timer, with the timer demoted to a fallback for the apps that don't expose readable field text. Both reversals are visible in git history if you want to see the actual back-and-forth.
 
 ## Tech stack
 
-`faster-whisper` / `ctranslate2` for transcription, `sounddevice` for audio I/O, `pynput` for the Win32 input hook, `pystray` + `Pillow` for the tray icon, `pywin32` for clipboard and window APIs, `pycaw` for per-session volume ducking, and `tkinter` for the overlay pill. No web framework, no database, no network calls.
+`faster-whisper` / `ctranslate2` for transcription, `sounddevice` for audio I/O, `pynput` for the Win32 input hook, `pystray` + `Pillow` for the tray icon, `pywin32` for clipboard and window APIs, `pycaw` for per-session volume ducking, `requests` for the local polish call, and `tkinter` for the overlay pill. No web framework, no database, no network calls that leave the machine — the only outbound request is the polish pass, to Ollama on 127.0.0.1.
 
 ## How I have mine set up
 
 - Model: `large-v3-turbo` on CUDA — [SETUP.md](SETUP.md) has the reasoning behind that choice.
-- Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl double-tap for toggle mode.
+- Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl tap for toggle mode.
 - Audio ducking on: other apps drop to 5% volume while I'm recording.
 - Mic releases after 10 seconds idle so Windows' mic-in-use indicator doesn't stay lit all day.
 - Repaste offer stays up for 10 seconds before it disappears on its own.

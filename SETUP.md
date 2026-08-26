@@ -112,10 +112,10 @@ Everything above gets you a fully working push-to-talk dictation tool. This sect
 **Install and pull the model:**
 
 ```powershell
-ollama pull qwen2.5:7b-instruct
+ollama pull dolphin-mistral
 ```
 
-I picked this model for conservative instruction-following over raw writing quality — it tends not to rewrite your wording just because it thinks it can do better. It's a 7B model, so it needs a real chunk of VRAM or RAM alongside whatever whisper is already using; if your GPU is smaller than mine, budget for that before assuming both fit comfortably at once.
+I started with a more conservative-instruction-following model, then swapped to this one after finding the first choice would quietly sanitize profanity despite an explicit prompt rule to preserve it — an alignment habit that's hard to prompt away. It's still not perfect on that front, just meaningfully better. It's a 7B-class model, so it needs a real chunk of VRAM or RAM alongside whatever whisper is already using; if your GPU is smaller than mine, budget for that before assuming both fit comfortably at once.
 
 **Why it exists at all, briefly:** I originally added this pass, then removed it entirely — code and Ollama dependency both — because it added latency for wording changes I didn't actually want most of the time. It came back once the regex-only cleanup step (`clean_text()`) started accumulating one hand-written pattern per quirk faster than felt sustainable. An LLM pass absorbs that whole category of fix in one place instead.
 
@@ -135,7 +135,7 @@ Once more, plainly: `[polish]` is turned on and working for me, but I'm still tu
 
 - Tray icon appears, and hovering it shows a word count for today and all-time.
 - Press-and-release the push-to-talk button (X2 by default) transcribes and pastes.
-- Double-tap Right Ctrl to enter toggle mode for longer dictation; tap it again to stop.
+- Tap Right Ctrl to enter toggle mode for longer dictation; tap it again to stop.
 - If polish is set up, check `wisprclone.log` after a toggle dictation — it logs a diff whenever polish actually changes the text, so you can see what it's doing.
 
 ## Troubleshooting

@@ -3,6 +3,25 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-26 — Repo-wide doc consistency review, and a standing rule for it
+
+A Sonnet review agent, then an independent Fable verification pass on top
+of it, checked all 17 tracked files plus the gitignored ones the docs
+reference against actual code/config/git history. 9 real mismatches found
+and fixed: CLAUDE.md's Files list was missing the four `mine_*.py` scripts
+and `retained_audio/`, its VAD candidate list and job-log format string
+were both stale, and it never mentioned Fable dispatches use an isolated
+worktree; SETUP.md still told a new reader to pull `qwen2.5:7b-instruct`
+with reasoning that no longer applied; README's continuation-bridging
+description, "no network calls" claim, and a promised-but-missing
+Technical Highlights section were all stale. Fable's pass caught one
+Sonnet missed: README and SETUP.md both said "double-tap Right Ctrl" for
+toggle mode, wrong since the very first commit - it's always been a single
+tap. All fixed same session.
+
+Prompted the standing rule now in CLAUDE.md's Conventions: doc consistency
+is a property of every push, checked before pushing, not a periodic audit.
+
 ## 2026-08-26 — Polish diff audit script; the swear-preservation fix isn't fully holding
 
 Second of the three "mine WisprClone's own logs" passes planned back on
