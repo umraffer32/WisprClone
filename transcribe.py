@@ -383,7 +383,7 @@ def trim_trailing_silence(audio, keep_s=0.25):
 
 
 # --- Phase A streaming shadow: diagnostic only, removed when real streaming lands.
-SHADOW_SILENCE_MS = (500, 700, 1000)
+SHADOW_SILENCE_MS = (300, 400, 500, 700, 1000)
 
 
 def vad_shadow(audio, jobs):

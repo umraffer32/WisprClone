@@ -57,6 +57,8 @@ def setting_row(recs, setting, whisper_ab, polish_ab):
     wa, wb = whisper_ab
     counts, lasts, felts, taxes, all_durs, blips = [], [], [], [], [], 0
     for rec in recs:
+        if setting not in rec["segs"]:
+            continue  # older record, predates this candidate setting
         durs = [e - s for s, e in rec["segs"][setting]]
         blips += sum(d < BLIP_S for d in durs)
         real = [d for d in durs if d >= BLIP_S]
@@ -74,7 +76,8 @@ def setting_row(recs, setting, whisper_ab, polish_ab):
         taxes.append((len(real) - 1) * wa)  # extra fixed cost vs one whole-clip pass
     if not counts:
         return None
-    return {"med_segs": np.median(counts), "one_seg": np.mean([c == 1 for c in counts]),
+    return {"n": len(counts), "med_segs": np.median(counts),
+            "one_seg": np.mean([c == 1 for c in counts]),
             "short": np.mean([d < MERGE_S for d in all_durs]),
             "long": np.mean([d > FORCE_CUT_S for d in all_durs]),
             "med_last": np.median(lasts), "med_felt": np.median(felts),
@@ -115,15 +118,17 @@ def main():
 
     if not toggle:
         raise SystemExit("no toggle records yet - the tuning table needs them")
-    print(f"\nper-setting table over {len(toggle)} toggle records "
-          "(felt = est. latency after you stop talking; tax = extra GPU s/dictation):")
-    print(f"  {'ms':>5} {'segs':>5} {'1seg':>5} {'<2s':>5} {'>25s':>5} "
+    print(f"\nper-setting table, up to {len(toggle)} toggle records each "
+          "(n differs per row - newer candidate settings have fewer records; "
+          "felt = est. latency after you stop talking; tax = extra GPU s/dictation):")
+    print(f"  {'ms':>5} {'n':>5} {'segs':>5} {'1seg':>5} {'<2s':>5} {'>25s':>5} "
           f"{'last':>6} {'felt':>6} {'tax':>5} {'blips':>5}")
-    for setting in sorted(toggle[0]["segs"], key=int):
+    all_settings = sorted({s for r in toggle for s in r["segs"]}, key=int)
+    for setting in all_settings:
         row = setting_row(toggle, setting, whisper_ab, polish_ab)
         if row is None:
             continue
-        print(f"  {setting:>5} {row['med_segs']:>5.1f} {row['one_seg']:>5.0%} "
+        print(f"  {setting:>5} {row['n']:>5} {row['med_segs']:>5.1f} {row['one_seg']:>5.0%} "
               f"{row['short']:>5.0%} {row['long']:>5.0%} {row['med_last']:>5.1f}s "
               f"{row['med_felt']:>5.1f}s {row['med_tax']:>4.1f}s {row['blips']:>5}")
 
