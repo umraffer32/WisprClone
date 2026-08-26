@@ -34,11 +34,13 @@ restore_delay_ms = 300
 clipboard_retries = 5
 clipboard_retry_ms = 20
 result_display_s = 10  # how long the pill offers a click-to-repaste checkmark
-continuation_gap_s = 0  # if the last dictation ended without a period and you
-                       # dictate again within this long (in the same window),
-                       # a period is stitched on before the new sentence.
-                       # 0 = disabled: false-positives on unrelated messages
-                       # in chat-style use outweighed the benefit
+continuation_gap_s = 4  # fallback only: the primary path reads the focused
+                       # field via UI Automation and stitches a period onto
+                       # an unfinished sentence only when the field still
+                       # ends with the previous paste. When the field's text
+                       # can't be read, this timer gates the old blind
+                       # heuristic (same window, recent) instead.
+                       # 0 = never stitch blind
 
 [polish]
 enabled = true          # LLM cleanup pass on dictations from either mode
@@ -47,7 +49,12 @@ min_audio_s = 8         # skip polish under this many seconds of audio - pure
                         # instant (polish costs ~0.4-0.6s on a short clip).
                         # Started at 5 (tax noticeable on 5-8s clips), went
                         # to 10, settled at 8 - all same-day feel tuning.
-model = "qwen2.5:7b-instruct"  # served locally by Ollama at 127.0.0.1:11434
+model = "dolphin-mistral"  # served locally by Ollama at 127.0.0.1:11434 - swapped
+                        # from qwen2.5:7b-instruct 2026-08-25: qwen's RLHF
+                        # alignment sanitized profanity in dictated speech
+                        # ("dog shit" -> "rejected", "weird shit" -> "weird")
+                        # despite the prompt's keep-wording rule; dolphin-mistral
+                        # kept every swear intact across a 6-case A/B
 timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
                         # dictation polishes in ~16-18s measured, so 30 leaves
                         # headroom (re-derive if max_recording_s changes). An

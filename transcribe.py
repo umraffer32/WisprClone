@@ -46,6 +46,8 @@ POLISH_PROMPT = (
     "- A question must remain a question.\n"
     "- Keep the speaker's own wording; do not paraphrase, summarize, or "
     "improve style.\n"
+    "- Preserve all profanity and swear words exactly as spoken - never "
+    "remove, replace, or soften them.\n"
     "- If unsure about an edit, leave that part unchanged.\n"
     "Output only the cleaned text - no preamble, no quotes, no "
     "explanation.\n\nText: "
@@ -148,28 +150,54 @@ def is_terminal():
 _uia = None
 
 
+def _get_uia():
+    global _uia
+    if _uia is None:
+        import comtypes
+        import comtypes.client
+        comtypes.CoInitialize()
+        comtypes.client.GetModule("UIAutomationCore.dll")
+        from comtypes.gen import UIAutomationClient as UIA
+        _uia = comtypes.client.CreateObject(UIA.CUIAutomation,
+                                            interface=UIA.IUIAutomation)
+    return _uia
+
+
 def focused_editable():
     """UI Automation check for apps that draw their own caret (Electron,
     Chromium): is the focused control an Edit field? Only Edit counts -
     Document would also match read-only web pages, and a wrong True here
     hides the repaste offer exactly when it's needed."""
-    global _uia
     try:
-        if _uia is None:
-            import comtypes
-            import comtypes.client
-            comtypes.CoInitialize()
-            comtypes.client.GetModule("UIAutomationCore.dll")
-            from comtypes.gen import UIAutomationClient as UIA
-            _uia = comtypes.client.CreateObject(UIA.CUIAutomation,
-                                                interface=UIA.IUIAutomation)
-        el = _uia.GetFocusedElement()
+        el = _get_uia().GetFocusedElement()
         ct = el.CurrentControlType
         log.debug("focused control type: %d", ct)
         return ct == 50004  # UIA_EditControlTypeId
     except Exception:
         log.debug("UIA focus check failed", exc_info=True)
         return False
+
+
+def focused_text():
+    """Full text of the focused control (TextPattern first, ValuePattern as
+    the fallback), or None when it exposes neither - the caller's signal to
+    fall back to the blind same-window heuristic. Probed 2026-08-25: every
+    field Uriah dictates into (Claude desktop, Firefox chrome + web content,
+    Gmail compose, Notepad) answers via TextPattern."""
+    try:
+        from comtypes.gen import UIAutomationClient as UIA
+        el = _get_uia().GetFocusedElement()
+        pat = el.GetCurrentPattern(10014)  # UIA_TextPatternId
+        if pat:
+            return pat.QueryInterface(
+                UIA.IUIAutomationTextPattern).DocumentRange.GetText(-1)
+        pat = el.GetCurrentPattern(10002)  # UIA_ValuePatternId
+        if pat:
+            return pat.QueryInterface(
+                UIA.IUIAutomationValuePattern).CurrentValue
+    except Exception:
+        log.debug("UIA text read failed", exc_info=True)
+    return None
 
 
 class Status:
@@ -391,10 +419,13 @@ class Transcriber(threading.Thread):
         self.continuation_gap_s = cfg["paste"]["continuation_gap_s"]
         self.normalize_peak = cfg["audio"]["normalize_peak"]
         self.polish_cfg = cfg["polish"]
-        # sentence-continuity tracking: was the last paste's window and
-        # end-punctuation state, so a follow-up dictation can retroactively
-        # close an unfinished sentence instead of running the two together
+        # sentence-continuity tracking: the last paste's window, tail (its
+        # final chars, whitespace-normalized, for matching against the
+        # focused field's UIA text), and end-punctuation state, so a
+        # follow-up dictation can retroactively close an unfinished
+        # sentence instead of running the two together
         self.last_hwnd = None
+        self.last_tail = ""
         self.last_ended_sentence = True
         self.last_paste_ts = 0.0
 
@@ -570,15 +601,28 @@ class Transcriber(threading.Thread):
                 with open(self.history, "a", encoding="utf-8") as f:
                     f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {text}\n")
 
-                # Bridge to whatever's already there: same window, recent,
-                # and the last dictation had no closing punctuation -> stitch
-                # a period on instead of running the two sentences together.
-                # Any other case (different window, timed out, or the last
-                # one already ended properly) just gets a plain space - safe
-                # default that can never glue two dictations together.
+                # Continuation, ground truth first: read the focused field
+                # via UIA. If its text still ends with our previous paste
+                # and that paste had no closing punctuation, the user is
+                # continuing the same thought -> stitch a period on. A sent,
+                # cleared, or hand-edited field simply fails the match and
+                # starts fresh. Fields that expose no text fall back to the
+                # blind heuristic (same window within continuation_gap_s).
+                # Terminals never stitch: a period would corrupt a command.
                 hwnd = ctypes.windll.user32.GetForegroundWindow()
-                if (hwnd == self.last_hwnd and not self.last_ended_sentence
-                        and time.monotonic() - self.last_paste_ts < self.continuation_gap_s):
+                stitch = False
+                if not self.last_ended_sentence and not is_terminal():
+                    field = focused_text()
+                    if field is not None:
+                        stitch = bool(self.last_tail) and \
+                            " ".join(field.split()).endswith(self.last_tail)
+                    else:
+                        stitch = (hwnd == self.last_hwnd
+                                  and time.monotonic() - self.last_paste_ts
+                                  < self.continuation_gap_s)
+                    log.info("continuation: %s stitch=%s",
+                             "field-read" if field is not None else "blind", stitch)
+                if stitch:
                     joined = ". " + text
                 elif self.last_hwnd is None:
                     joined = text  # very first dictation - nothing to bridge from
@@ -587,6 +631,7 @@ class Transcriber(threading.Thread):
 
                 self.clipboard.paste(joined)
                 self.last_hwnd = hwnd
+                self.last_tail = " ".join(text.split())[-60:]
                 self.last_ended_sentence = text[-1] in ".!?"
                 self.last_paste_ts = time.monotonic()
 

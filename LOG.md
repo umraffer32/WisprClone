@@ -3,6 +3,33 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-25 — UIA continuation stitching, polish swapped to dolphin-mistral (branch: streaming)
+
+- Researched how Wispr Flow solves the "no period between short dictations"
+  problem before building anything: it reads the focused field's live
+  content via accessibility APIs instead of guessing from a timer. Built
+  the same approach: `focused_text()` reads the focused control via UI
+  Automation (TextPattern, ValuePattern fallback), and a follow-up
+  dictation stitches a period onto the previous paste only when the field
+  still ends with that paste's tail. Old timer/same-window heuristic
+  survives as `continuation_gap_s` (4s), used only when a field exposes
+  neither pattern. Terminals excluded - the full screen buffer would
+  corrupt commands. Verified live across Claude desktop, Firefox
+  (chrome + web content), Gmail compose, Notepad, and both PowerShell and
+  WSL terminals via a throwaway probe script (not committed, gitignored).
+- Separately: qwen2.5:7b-instruct was sanitizing profanity in dictated
+  speech despite the polish prompt's "keep the speaker's own wording"
+  rule ("dog shit" -> "rejected", "weird shit" -> "weird"), inconsistently
+  in the same session. Diagnosed with temperature 0 vs 0.1 A/B testing -
+  output still varied at temp 0 (GPU float non-determinism on near-tied
+  logits), proving the model was confidently choosing to censor certain
+  spots, not randomly guessing. Switched `[polish] model` to
+  `dolphin-mistral` and added an explicit prompt rule ("preserve all
+  profanity... never remove, replace, or soften"). Fixed most cases
+  outright; a swear used as a stand-alone interjection ("fuck me") is
+  still the harder case for the model to leave alone, though live use
+  after the change has come through clean.
+
 ## 2026-08-24 — pill is draggable, position persists (branch: streaming)
 
 - The parked maybe-later from the slimming decision, implemented as the
