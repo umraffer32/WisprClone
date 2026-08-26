@@ -3,7 +3,7 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
-## 2026-08-26 — Decided against a public release
+## 2026-08-25 — Decided against a public release
 
 Compared WisprClone directly against Handy (github.com/cjpais/Handy), the
 most popular free Wispr Flow alternative: 30k+ GitHub stars, MIT, Rust/Tauri,
