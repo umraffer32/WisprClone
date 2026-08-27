@@ -3,6 +3,26 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Two accuracy fixes from the fresh-eyes review: "that that" and idle_close_s
+
+Two of the review's accuracy findings, applied directly (no code):
+
+- **"that" added to emphasis_words.txt.** The pre-WisprClone Wispr Flow
+  corpus (2,291 dictations) has 12 legitimate "that that" uses ("realized
+  that that strategy", "now that that's out of the way"); history.log
+  since WisprClone went live has zero - _STUTTER has been silently
+  collapsing every one, corrupting the grammar roughly once every day or
+  two at current dictation volume. Applies live, no restart. The regex
+  layer's lack of any log trail (this bug was invisible to mine_polish)
+  is being fixed separately.
+- **idle_close_s raised 10 -> 300.** At 10s the mic suspended between
+  nearly every pair of dictations, so almost every dictation started
+  with a 50-300ms device reopen and an empty pre-roll - a first-syllable
+  clipping risk on every fresh thought, paid for a cosmetic benefit (the
+  in-use indicator clearing quickly). 5 minutes keeps the mic hot through
+  active work; the indicator still clears once actually away. Takes
+  effect on next restart.
+
 ## 2026-08-27 — Live testing revised the boost hold to ~2s; bounded re-warm shipped
 
 Live verification of the warm-at-press fix (restart 11:32; five ~4s cold
