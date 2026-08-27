@@ -3,6 +3,22 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Capped polish generation length
+
+The dolphin-mistral runaway from today's replay ("Damn" -> 170s / 25k+
+chars before the ratio guard caught it) had a root cause the guard only
+patched over after the fact: the Ollama request had no `num_predict`, so
+nothing bounded how long the model could generate before the existing
+min_ratio/max_ratio check ever saw the result. Added a cap derived from
+the input itself - `max(64, len(text)/4 * max_ratio)`, reusing the
+existing `[polish]` max_ratio rather than a new constant - so it scales
+with the dictation instead of being one fixed number that either clips
+long inputs or does nothing for short ones. Verified against the real
+"Damn" case post-fix: dolphin still misbehaves (fabricates a fake
+dictation) but stops at the 64-token floor in ~2.6s, the ratio guard
+still rejects it, raw text still ships. qwen2.5, the live production
+model, is unaffected - it already no-ops on "Damn" in ~0.1s.
+
 ## 2026-08-27 — Polish swapped back to qwen2.5, backed by a swear-count guard
 
 The 8/25 swap to dolphin-mistral traded a real problem for a worse one and

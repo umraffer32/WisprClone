@@ -617,8 +617,13 @@ class Transcriber(threading.Thread):
                 # num_ctx: Ollama's runtime default is 4096 tokens, which a
                 # max-length dictation approaches; overflow silently truncates
                 # the FRONT of the prompt - the instructions - leaving the
-                # model free-running on bare dictation text
-                "options": {"temperature": 0, "num_ctx": 8192},
+                # model free-running on bare dictation text.
+                # num_predict: the ratio guard below rejects anything past
+                # max_ratio of the input anyway (~4 chars/token, 64-token
+                # floor for tiny inputs), so cap generation there - unbounded,
+                # a runaway ran 170s / 25k chars before the guard saw it
+                "options": {"temperature": 0, "num_ctx": 8192,
+                            "num_predict": max(64, int(len(text) / 4 * p["max_ratio"]))},
             }, timeout=p["timeout_s"])
             r.raise_for_status()
             polished = r.json()["response"].strip()
