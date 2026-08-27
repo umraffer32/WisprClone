@@ -118,9 +118,13 @@ class Recorder:
         # The GPU downclocks between dictations, and the first transcribe
         # after idle pays ~0.25s of clock ramp (measured). The worker sits
         # idle while the user talks, so a warm job hides the ramp inside the
-        # recording. Skipped when a job is queued or in flight - the GPU is
-        # hot or about to be, and a warm would only delay the real job.
-        # device is "" until the model loads, so startup skips too.
+        # recording - and keeps re-warming while status.recording holds,
+        # since the boost alone decays in ~2s. Skipped when a job is queued
+        # or in flight - the GPU is hot or about to be, and a warm would
+        # only delay the real job. device is "" until the model loads, so
+        # startup skips too.
+        self.status.recording = True  # before the put: the worker must
+                                      # never see the sentinel first
         if (self.status.device == "cuda" and self.jobs.empty()
                 and self.status.transcribing == 0):
             self.jobs.put({"warm": True})
@@ -130,6 +134,7 @@ class Recorder:
     def stop_recording(self, discard=False):
         self.discard_next = discard
         self.want_recording = False
+        self.status.recording = False  # ends the re-warm loop, job or no job
 
     @property
     def recording_seconds(self):

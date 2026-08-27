@@ -3,6 +3,38 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Live testing revised the boost hold to ~2s; bounded re-warm shipped
+
+Live verification of the warm-at-press fix (restart 11:32; five ~4s cold
+PTT reps, micro/burst/long rounds, and a 0.3s-interval GPU clock trace):
+the warm fires on every press - the trace caught utilization spiking to
+100% at press and clocks jumping to 2790MHz - but under real desktop
+load the boost holds only ~2s after the warm's work ends, not the 4-5s
+the idle bench suggested (ambient desktop GPU activity cycles clocks
+every ~5s and drags the boost down). Results: micro holds 0.20-0.22s
+reliably, ~4s holds bimodal (0.31-0.33 vs 0.44-0.53, a coin flip on
+where the ambient cycle sits at release), 24.3s toggle unchanged at
+0.83s. No transcription-quality change anywhere.
+
+Follow-up (second Fable agent, isolated worktree): _warm_gpu is now a
+bounded re-warm loop - it re-warms every 2s while Status.recording holds
+(new flag, mirrored by Recorder start/stop_recording; stop covers the
+too-short discard path), giving up 15s in so a minutes-long toggle never
+sustains periodic draw. Re-warms run inline in the worker, never queued,
+so a release waits behind at most the one warm in flight (~0.1-0.2s
+measured) and then transcribes hot. Worker-loop design chosen over
+tick-driven enqueueing because the tick variant can stack two warms
+ahead of a release exactly when the GPU is contended. Both constants
+derived from measurement, kept in code, not config.
+
+Verified from clock-gated cold states with interleaved controls: 5-6s
+holds now transcribe at the 0.28s hot floor where the single-warm build
+measured 0.44-0.51; a 17.5s hold lands cold by design (last warm starts
+at 14.3s). Stop conditions, the one-in-flight wait (187ms), and
+counter/drain safety all demonstrated (22/22 stub suite). Live re-check
+after this merge: rerun the ~4s cold reps - they should stop
+coin-flipping.
+
 ## 2026-08-27 — GPU warm-at-press: hide the idle clock ramp inside the recording
 
 A fresh-eyes latency review found ~0.25s of nearly every dictation was

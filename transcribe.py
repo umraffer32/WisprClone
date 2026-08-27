@@ -218,6 +218,8 @@ class Status:
         self.ready = False
         self.device = ""
         self.mic_ok = True
+        self.recording = False  # Recorder mirrors the live recording here;
+                                # the worker's GPU re-warm loop watches it
         self.error = ""
         self.last_text = ""
         self.flash_error = False  # UI tick consumes this
@@ -423,6 +425,15 @@ def vad_shadow(audio, jobs):
     return out
 
 
+# Both derived from measurement, not tunable feel - so code, not config.toml.
+# 2s: how long the clock boost survives a warm under real desktop load
+# (ambient GPU activity cycles clocks every ~5s and drags it down; the idle
+# bench's 4-5s was optimistic). 15s: PTT p90 is 16s - the bound is on
+# STARTING a warm, and the last one's boost carries coverage ~2s past it.
+WARM_INTERVAL_S = 2.0
+WARM_BOUND_S = 15.0
+
+
 class Transcriber(threading.Thread):
     def __init__(self, cfg, base_dir, jobs, status):
         super().__init__(daemon=True, name="transcriber")
@@ -526,16 +537,34 @@ class Transcriber(threading.Thread):
     def _warm_gpu(self):
         """Enqueued by Recorder.start_recording as {"warm": True}: ramps the
         GPU clocks back up while the user is still talking, so the real job
-        lands hot. Bypasses _transcribe on purpose - a failed warm must not
-        count toward the CPU latch. Same constraint as _load's warmup: VAD
-        off and the generator consumed, or the encoder never runs. Failures
-        are swallowed - a warm is optional and must never flash the pill."""
-        try:
-            segs, _ = self.model.transcribe(np.zeros(16000, dtype=np.float32),
-                                            language="en", vad_filter=False)
-            list(segs)
-        except Exception:
-            log.exception("gpu warm failed")
+        lands hot. One warm isn't enough - under desktop load the boost
+        decays ~2s after a warm's work ends (live clock trace 2026-08-27) -
+        so this re-warms on that period while status.recording holds,
+        giving up at WARM_BOUND_S: PTT audio is median 5.7s / p90 16s, so
+        ~15s covers nearly all of it, while a minutes-long toggle must not
+        sustain periodic GPU draw (streaming owns long-recording latency).
+        Between warms it polls every 30ms, so a real job - or the recording
+        ending, including a too-short discard, which enqueues nothing -
+        waits behind at most the one warm already in flight (~0.2s hot).
+        Bypasses _transcribe on purpose - a failed warm must not count
+        toward the CPU latch. Same constraint as _load's warmup: VAD off
+        and the generator consumed, or the encoder never runs. Failures are
+        swallowed - a warm is optional and must never flash the pill."""
+        start = time.monotonic()
+        while True:
+            try:
+                segs, _ = self.model.transcribe(np.zeros(16000, dtype=np.float32),
+                                                language="en", vad_filter=False)
+                list(segs)
+            except Exception:
+                log.exception("gpu warm failed")
+                return  # broken once means broken on retry - log it once
+            next_warm = time.monotonic() + WARM_INTERVAL_S
+            while time.monotonic() < next_warm:
+                if (not self.status.recording or not self.jobs.empty()
+                        or time.monotonic() - start > WARM_BOUND_S):
+                    return
+                time.sleep(0.03)
 
     def _warm_polish(self):
         """Bare model-load request: no prompt, so no generation and none of
