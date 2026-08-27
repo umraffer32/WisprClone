@@ -115,6 +115,15 @@ class Recorder:
         self.mode = mode  # set before the flag; the callback reads both together
         self.discard_next = False  # a discard whose falling edge got merged
                                    # away must not eat this recording
+        # The GPU downclocks between dictations, and the first transcribe
+        # after idle pays ~0.25s of clock ramp (measured). The worker sits
+        # idle while the user talks, so a warm job hides the ramp inside the
+        # recording. Skipped when a job is queued or in flight - the GPU is
+        # hot or about to be, and a warm would only delay the real job.
+        # device is "" until the model loads, so startup skips too.
+        if (self.status.device == "cuda" and self.jobs.empty()
+                and self.status.transcribing == 0):
+            self.jobs.put({"warm": True})
         self.rec_start_ts = time.monotonic()
         self.want_recording = True
 
@@ -191,6 +200,8 @@ if __name__ == "__main__":
 
     class _Status:
         mic_ok = True
+        device = ""
+        transcribing = 0
         def inc_transcribing(self):
             pass
 

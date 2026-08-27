@@ -3,6 +3,38 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — GPU warm-at-press: hide the idle clock ramp inside the recording
+
+A fresh-eyes latency review found ~0.25s of nearly every dictation was
+GPU clock ramp: the card idles down between dictations (minutes apart in
+real use), and the same 7s clip measured 0.56-0.61s after 45s of GPU
+idle vs 0.30-0.33s repeated immediately - which is the gap between the
+live PTT whisper median (0.52s over 669 jobs) and back-to-back
+benchmarks (0.33s). Decode options were ruled out first: beam 1 /
+no-timestamps A/B'd on 24 retained WAVs bought only ~50-70ms and
+introduced real wording regressions, so beam 5 stays.
+
+Fix (Fable agent, isolated worktree, offline verification):
+Recorder.start_recording() enqueues a {"warm": True} sentinel when the
+device is CUDA and nothing is queued or in flight; the worker transcribes
+1s of zeros (VAD off, same constraint as _load's warmup) and discards
+it, so the clock ramp happens while the user is still talking. The
+sentinel is handled before the job try/finally (it never touches the
+transcribing counter teardown waits on), skipped without side effects in
+the model-load-failure drain loop, and a warm failure is logged and
+swallowed - it can never flash the pill or feed the CPU fail latch.
+
+Verified from clock-gated cold states (210MHz confirmed before every
+cycle; fixed idle sleeps proved unreliable - desktop GPU use holds
+clocks up): control 0.533-0.551s, warmed 0.258-0.285s, which is the hot
+floor. Counter/drain safety 12/12 against the real run() loop with a
+stubbed model. Measured bound: the clock boost decays ~4-5s after the
+warm, so short PTT bursts get the full ~0.26s, the ~6s median gets part
+of it, and long recordings land cold exactly as before - never a
+regression; streaming owns the long case. Periodic re-warm during long
+recordings considered and rejected (sustained GPU draw through
+minutes-long toggles).
+
 ## 2026-08-26 — Repo-wide doc consistency review, and a standing rule for it
 
 A Sonnet review agent, then an independent Fable verification pass on top

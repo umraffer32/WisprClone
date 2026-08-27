@@ -17,8 +17,9 @@ onboarding work unless explicitly asked.
 - `wisprclone.py` — entry point: single-instance mutex, StateMachine, input
   hooks, tk main loop (`tick()` every 33ms), teardown and tray-Restart relaunch.
 - `audio.py` — `Recorder`: sounddevice callback, 250ms pre-roll, buffers
-  blocks while recording, enqueues `{"blocks", "mode"}` jobs on stop. Also
-  `Ducker` (lowers other apps' volume while the mic is hot).
+  blocks while recording, enqueues `{"blocks", "mode"}` jobs on stop and a
+  `{"warm": True}` GPU-warm sentinel on start. Also `Ducker` (lowers other
+  apps' volume while the mic is hot).
 - `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, regex
   `clean_text()`, LLM polish (duration-gated, mode-agnostic), clipboard
   paste. Also the polish prompt and its output guards.

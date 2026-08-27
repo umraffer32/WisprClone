@@ -523,6 +523,20 @@ class Transcriber(threading.Thread):
         segs, _ = self.cpu_model.transcribe(audio, **self.decode_opts)
         return list(segs)
 
+    def _warm_gpu(self):
+        """Enqueued by Recorder.start_recording as {"warm": True}: ramps the
+        GPU clocks back up while the user is still talking, so the real job
+        lands hot. Bypasses _transcribe on purpose - a failed warm must not
+        count toward the CPU latch. Same constraint as _load's warmup: VAD
+        off and the generator consumed, or the encoder never runs. Failures
+        are swallowed - a warm is optional and must never flash the pill."""
+        try:
+            segs, _ = self.model.transcribe(np.zeros(16000, dtype=np.float32),
+                                            language="en", vad_filter=False)
+            list(segs)
+        except Exception:
+            log.exception("gpu warm failed")
+
     def _warm_polish(self):
         """Bare model-load request: no prompt, so no generation and none of
         _polish's guards, and its own generous timeout - a cold load off disk
@@ -619,7 +633,8 @@ class Transcriber(threading.Thread):
             self.status.error = "model unavailable"
             # drain jobs forever so recordings don't pile up
             while True:
-                self.jobs.get()
+                if "warm" in self.jobs.get():
+                    continue  # no counter to balance, no dictation lost
                 self.status.dec_transcribing()
                 self.status.flash_error = True
         self.status.ready = True
@@ -632,6 +647,11 @@ class Transcriber(threading.Thread):
 
         while True:
             job = self.jobs.get()
+            if "warm" in job:
+                # before the try: its finally decrements transcribing,
+                # which warm jobs never incremented
+                self._warm_gpu()
+                continue
             t0 = time.monotonic()
             try:
                 audio = np.concatenate(job["blocks"])
