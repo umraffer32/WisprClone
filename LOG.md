@@ -3,6 +3,25 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Observability: clean_text edits logged, paste tail timed
+
+The last two review items. clean_text() edited every dictation with no
+log trail - the "that that" corruption stayed invisible to mine_polish's
+audit for a week because the regex layer left nothing to mine. It now
+logs the same raw/out diff block as polish (lead-in "clean_text changed
+text:", verified not to trip mine_polish's block parser), including when
+cleanup empties the text entirely. The job line gains paste=: polish-end
+through the Ctrl+V keystroke (UIA continuation read and clipboard swap
+included, the 300ms restore sleep after the keystroke excluded), closing
+the one unmeasured span of felt latency. The polish diff and job line
+moved after the paste to carry the timing, with the diff kept
+immediately before its job line - mine_polish resolves each pair's
+mode/status from the next timestamped line, and the continuation line
+would otherwise split them. All three log parsers verified against both
+line formats; the agent's stub suites were re-run against the merged
+tree (its worktree had spawned two commits stale, so its own
+verification predated the warm code).
+
 ## 2026-08-27 — Two accuracy fixes from the fresh-eyes review: "that that" and idle_close_s
 
 Two of the review's accuracy findings, applied directly (no code):

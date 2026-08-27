@@ -353,6 +353,9 @@ class Clipboard:
             self.kb.release(mod)
         with self.kb.pressed(Key.ctrl):
             self.kb.tap("v")
+        # the user has their text from here on; returned so the job line's
+        # paste= timing stops at the keystroke, not the restore sleep
+        sent = time.monotonic()
 
         # No signal exists for "paste consumed"; the delay is the honest fix
         time.sleep(self.restore_delay)
@@ -366,6 +369,7 @@ class Clipboard:
                 self._mark_transient()
             finally:
                 win32clipboard.CloseClipboard()
+        return sent
 
     def set_text(self, text):
         if self._open():
@@ -687,9 +691,15 @@ class Transcriber(threading.Thread):
                 audio = trim_trailing_silence(audio)
                 audio = normalize(audio, self.normalize_peak)
                 segments = self._transcribe(audio)
-                text = " ".join(s.text.strip() for s in segments
-                                if s.no_speech_prob < 0.6)
-                text = clean_text(text, self.corrections, self.emphasis_words)
+                whisper_text = " ".join(s.text.strip() for s in segments
+                                        if s.no_speech_prob < 0.6)
+                text = clean_text(whisper_text, self.corrections, self.emphasis_words)
+                if text != whisper_text:
+                    # same two-line shape as the polish diff so the regex
+                    # layer's edits are auditable too; the different lead-in
+                    # keeps it out of mine_polish.py's block parser
+                    log.info("clean_text changed text:\n  raw: %s\n  out: %s",
+                             whisper_text, text)
                 if not text:
                     continue  # silence/hallucination: paste nothing
                 t1 = time.monotonic()
@@ -697,15 +707,14 @@ class Transcriber(threading.Thread):
                 # recording - short bursts stay instant, anything longer
                 # gets cleaned regardless of mode
                 polish_status = "skipped"
+                polish_raw = None
                 if (self.polish_cfg["enabled"]
                         and len(audio) / 16000 >= self.polish_cfg["min_audio_s"]):
-                    raw = text
+                    polish_raw = text
                     text, polish_status = self._polish(text)
-                    if text != raw:
-                        log.info("polish changed text:\n  raw: %s\n  out: %s", raw, text)
+                    if text == polish_raw:
+                        polish_raw = None
                 t2 = time.monotonic()
-                log.info("job: audio=%.1fs whisper=%.2fs polish=%.2fs mode=%s polish_status=%s",
-                         len(audio) / 16000, t1 - t0, t2 - t1, job["mode"], polish_status)
                 self.status.last_text = text
                 self.status.add_words(text)
                 with open(self.history, "a", encoding="utf-8") as f:
@@ -739,7 +748,19 @@ class Transcriber(threading.Thread):
                 else:
                     joined = " " + text
 
-                self.clipboard.paste(joined)
+                t3 = self.clipboard.paste(joined)
+                if t3 is None:
+                    t3 = time.monotonic()  # clipboard busy - nothing was sent
+                # both logged only now so paste= reaches the Ctrl+V;
+                # mine_polish.py needs the diff block immediately before its
+                # job line (the continuation line would otherwise split them)
+                if polish_raw is not None:
+                    log.info("polish changed text:\n  raw: %s\n  out: %s",
+                             polish_raw, text)
+                log.info("job: audio=%.1fs whisper=%.2fs polish=%.2fs mode=%s "
+                         "polish_status=%s paste=%.2fs",
+                         len(audio) / 16000, t1 - t0, t2 - t1, job["mode"],
+                         polish_status, t3 - t2)
                 self.last_hwnd = hwnd
                 self.last_tail = " ".join(text.split())[-60:]
                 self.last_ended_sentence = text[-1] in ".!?"

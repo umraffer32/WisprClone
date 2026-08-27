@@ -31,8 +31,8 @@ onboarding work unless explicitly asked.
   (comma or not), one per line, applied live (no restart).
 - `history.log` — every pasted dictation, timestamped. Seeds the tray word
   counter. `wisprclone.log` (1MB rotating) holds diagnostics and per-job
-  timing lines (`job: audio=… whisper=… polish=… mode=… polish_status=…`)
-  plus raw/polished diffs whenever polish changes text.
+  timing lines (`job: audio=… whisper=… polish=… mode=… polish_status=…
+  paste=…`) plus raw/out diffs whenever polish or clean_text changes text.
 - `vad_shadow.log` — streaming-branch diagnostic only: one JSON line per
   dictation with the Silero segment bounds streaming would have used
   (300/400/500/700/1000ms candidates). Gitignored via `*.log`; goes away
