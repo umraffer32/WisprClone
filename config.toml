@@ -54,12 +54,16 @@ min_audio_s = 8         # skip polish under this many seconds of audio - pure
                         # instant (polish costs ~0.4-0.6s on a short clip).
                         # Started at 5 (tax noticeable on 5-8s clips), went
                         # to 10, settled at 8 - all same-day feel tuning.
-model = "dolphin-mistral"  # served locally by Ollama at 127.0.0.1:11434 - swapped
-                        # from qwen2.5:7b-instruct 2026-08-25: qwen's RLHF
-                        # alignment sanitized profanity in dictated speech
-                        # ("dog shit" -> "rejected", "weird shit" -> "weird")
-                        # despite the prompt's keep-wording rule; dolphin-mistral
-                        # kept every swear intact across a 6-case A/B
+model = "qwen2.5:7b-instruct"  # served locally by Ollama at 127.0.0.1:11434 -
+                        # swapped back from dolphin-mistral 2026-08-27: a
+                        # 405-case replay showed dolphin no-ops on 71% of
+                        # dictations vs qwen's 31% (worst on the 300-600 char
+                        # range polish exists for), at identical latency, with
+                        # no fabrication difference. qwen's profanity
+                        # sanitizing (the 8/25 reason it was dropped) is now
+                        # caught deterministically by _polish's swear-count
+                        # guard instead of relying on the prompt to hold it -
+                        # dolphin dropped profanity in the same replay too
 timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
                         # dictation polishes in ~16-18s measured, so 30 leaves
                         # headroom (re-derive if max_recording_s changes). An

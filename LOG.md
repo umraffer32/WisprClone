@@ -3,6 +3,38 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Polish swapped back to qwen2.5, backed by a swear-count guard
+
+The 8/25 swap to dolphin-mistral traded a real problem for a worse one and
+nothing logged it until today's new clean_text/polish diff logging made it
+visible: a dictation came back completely unpunctuated despite polish
+reporting `polish_status=ok`. Reproduced deterministically (byte-identical
+output across three prompt variants) and confirmed not a one-off - across
+every polished dictation since the swap, 77% came back with zero edits.
+
+Dispatched a Fable agent (max effort, worktree) to build a 405-case offline
+replay corpus from history.log + wisprclone.log and run it through both
+models with `_polish`'s real request shape. Findings: dolphin no-ops 71% of
+dictations vs qwen's 31%, worst exactly in the 300-600 char range polish
+exists for; of the 150 inputs qwen's own production era actually needed to
+fix, dolphin can only fix 38% of them today. Latency is a wash (0.97s vs
+0.95s median, warmed) - my earlier "qwen is 2.5x slower" reading was a
+cold-model-load artifact, not a real cost. Neither model fabricated content
+on realistic input, but dolphin has a failure mode qwen doesn't: two
+inputs under 3.5s of audio sent it into runaway generation, 170s producing
+25k+ characters before the ratio guard caught it (harmless in practice
+since both are under the 8s polish gate, but real). qwen's real cost:
+lightly rewords in ~75% of its edits and silently dropped a real sentence
+or hedge in ~1.5-2% of all 405 cases, uncaught by any guard.
+
+Added a third deterministic guard to `_polish`, same shape as the existing
+ratio/dropped-question checks: count profanity words in vs out, reject and
+fall back to raw text (`polish_status=dropped_profanity`) on any drop. This
+replaces the 8/25 approach of asking the prompt to preserve swears, which
+the replay showed doesn't hold reliably for either model - both dolphin and
+qwen dropped profanity at least once in the 45 flagged replay cases, and
+all of those would have shipped silently under the old guards.
+
 ## 2026-08-27 — Observability: clean_text edits logged, paste tail timed
 
 The last two review items. clean_text() edited every dictation with no

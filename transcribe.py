@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import wave
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -57,6 +58,18 @@ POLISH_PROMPT = (
     "Output only the cleaned text - no preamble, no quotes, no "
     "explanation.\n\nText: "
 )
+
+# A model's alignment can quietly sanitize swears despite the prompt's
+# preserve-profanity rule (qwen2.5 rewrote "dog shit" out entirely,
+# 2026-08-25), so _polish backs the rule with a count check against this
+# list. Inflections are spelled out because \b can't connect "fucking" to
+# "fuck". Internal sanity list, not a config knob. Matched against
+# lowercased text, so no IGNORECASE needed.
+_SWEARS = re.compile(
+    r"\b(?:fuck(?:ing|ed|er|ers)?|motherfuck(?:ing|er|ers)?|shit(?:s|ty)?|"
+    r"bullshit|damn|dammit|goddamn(?:it)?|ass(?:es|hole|holes)?|"
+    r"bitch(?:es|y)?|bastards?|crap(?:py)?|piss(?:ed|ing)?|dicks?|cocks?|"
+    r"cunts?|pricks?|whores?|sluts?)\b")
 
 log = logging.getLogger("wisprclone")
 
@@ -617,6 +630,11 @@ class Transcriber(threading.Thread):
                 # a dropped short question passes the ratio guard easily
                 log.warning("polish dropped a question, using raw")
                 return text, "dropped_question"
+            if Counter(_SWEARS.findall(text.lower())) - Counter(
+                    _SWEARS.findall(polished.lower())):
+                # counts, not presence: "shit" twice in, once out is a loss
+                log.warning("polish dropped profanity, using raw")
+                return text, "dropped_profanity"
             return polished, "ok"
         except requests.Timeout:
             log.exception("polish timed out, using raw text")
