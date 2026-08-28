@@ -10,13 +10,15 @@ debounce_ms = 300
 [audio]
 duck = true           # lower other apps' volume while recording
 duck_factor = 0.05    # they play at 5% while the mic is hot
-idle_close_s = 300    # release the mic (and its tray icon) this many seconds
-                      # after the last dictation. 0 = always hot. Was 10;
-                      # raised 2026-08-27: every reopen risks clipping the
-                      # first syllable (50-300ms device open, empty pre-roll),
-                      # and at 10s that tax landed on nearly every dictation.
-                      # 5min keeps the mic hot through active work and still
-                      # clears the in-use indicator once actually away.
+idle_close_s = 10     # release the mic (and its tray icon) this many seconds
+                      # after the last dictation. 0 = always hot. Briefly
+                      # raised to 300 on 2026-08-27 over a clipping-risk
+                      # theory (50-300ms device open, empty pre-roll on
+                      # reopen); reverted the same day after a full day of
+                      # real dictation at 10s never actually produced a
+                      # clipped first word. Preferring the indicator
+                      # clearing quickly over a theoretical risk that
+                      # didn't show up in practice.
 preroll_ms = 250
 min_recording_s = 0.3
 max_recording_s = 300

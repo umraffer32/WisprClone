@@ -3,6 +3,18 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — idle_close_s reverted 300 -> 10
+
+Raised earlier today over a clipping-risk theory: a reopened mic loses its
+pre-roll and pays a 50-300ms device-open delay, and at 10s that reopen
+preceded 87% of real dictations (measured from history.log). Reverted the
+same day on direct feedback: across 10s having been the long-standing
+value before today's change, and both before and after it, not a single
+felt clip of a first word. The indicator staying lit for up to 5 minutes
+was the real, felt cost; the clip it was meant to prevent never showed up
+in practice. Preferring the indicator clearing quickly since the
+theoretical risk it traded away turned out to not matter day to day.
+
 ## 2026-08-27 — Real streaming shelved
 
 The multi-day streaming plan (Silero VAD chunking during recording so

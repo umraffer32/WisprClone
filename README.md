@@ -36,7 +36,7 @@ Nothing shares mutable state without a clear owner: the audio buffer belongs to 
 
 **GPU with a real fallback, not just a try/except.** The model loads on CUDA if available and falls back to CPU on failure. A failure counter latches to CPU after repeated GPU failures within a session, so a flaky driver doesn't retry and fail on every single transcription.
 
-**A mic that skips the open latency between uses.** The audio stream doesn't reopen on every press, because opening a device takes 50-300ms, long enough to clip the first word of an utterance and stall the input hook while it waits. A short pre-roll buffer also captures the moment just before the button is pressed so speech doesn't get cut off. It's not permanently open, though: mine releases the mic after 5 minutes of no dictation so Windows' mic-in-use indicator doesn't stay lit all day, and the first syllable after it reopens can clip, a documented tradeoff. (I originally used 10 seconds, which meant nearly every dictation started from a fresh reopen and carried that clipping risk; a few minutes keeps the mic hot through active work.) That idle timeout can be set to 0 for a genuinely always-hot mic if the clip matters more to you than the indicator. If the mic isn't there yet at launch, say the app starts at login before a USB mic has enumerated, that open failure is caught instead of taking the whole app down before the tray icon even exists. The stale-stream watchdog picks it up and retries a few seconds later.
+**A mic that skips the open latency between uses.** The audio stream doesn't reopen on every press, because opening a device takes 50-300ms, long enough to clip the first word of an utterance and stall the input hook while it waits. A short pre-roll buffer also captures the moment just before the button is pressed so speech doesn't get cut off. It's not permanently open, though: mine releases the mic after 10 seconds of no dictation so Windows' mic-in-use indicator doesn't stay lit for long. In theory that risks clipping the first syllable on reopen; in practice, a day of testing a much longer hold (5 minutes, to keep the mic hot through active work) never once produced a clip I actually noticed, so it went back to clearing the indicator quickly instead. That idle timeout can be set to 0 for a genuinely always-hot mic if you'd rather not take the theoretical risk at all. If the mic isn't there yet at launch, say the app starts at login before a USB mic has enumerated, that open failure is caught instead of taking the whole app down before the tray icon even exists. The stale-stream watchdog picks it up and retries a few seconds later.
 
 **Word counts that survive a restart.** Rather than keeping a running total only in memory, the tray's word counters are seeded on startup by re-parsing `history.log`, so quitting and relaunching the app doesn't lose the count.
 
@@ -53,7 +53,7 @@ Early versions ran an LLM polish pass over toggle-mode dictation through a local
 - Model: `large-v3-turbo` on CUDA — [SETUP.md](SETUP.md) has the reasoning behind that choice.
 - Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl tap for toggle mode.
 - Audio ducking on: other apps drop to 5% volume while I'm recording.
-- Mic releases after 5 minutes idle so Windows' mic-in-use indicator doesn't stay lit all day.
+- Mic releases after 10 seconds idle so Windows' mic-in-use indicator clears quickly.
 - Repaste offer stays up for 10 seconds before it disappears on its own.
 
 ## Setup
