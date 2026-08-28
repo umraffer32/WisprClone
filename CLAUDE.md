@@ -110,3 +110,15 @@ a failed polish must never lose a dictation). Always address it as
   goal is that docs are never something Uriah has to separately worry about
   or schedule an audit for - consistency is a property of every push, not a
   periodic cleanup task.
+  - Reinforced 2026-08-27: a commit adding a 4th `_polish()` guard checked
+    CLAUDE.md and searched for that commit's own keywords, but missed a
+    SETUP.md paragraph written days earlier that named the other three
+    guards by name - the search never looked for "guard" as a category,
+    only for terms specific to the new one. Grepping a commit's own diff
+    for its own vocabulary isn't enough when a claim living somewhere else
+    enumerates the same thing without ever mentioning the new addition by
+    name. When a change adds to, removes from, or changes a set something
+    is already true of (guards, models, config knobs, threads, files),
+    search all three docs for the *category* word (guard, model, thread),
+    not just the specific new/changed term - an old paragraph enumerating
+    siblings won't contain the new one's name for a keyword search to catch.
