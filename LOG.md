@@ -3,6 +3,48 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Sentence-drop guard added; segment-parallel polish ruled out
+
+Two things prompted by the same day's earlier finding: today's 405-case
+qwen-vs-dolphin replay also surfaced that qwen2.5 silently drops a whole
+sentence or meaning-bearing clause on a small slice of dictations, uncaught
+by any existing guard - a real-content-loss failure mode distinct from the
+profanity-drop one already fixed.
+
+**Guard.** Replayed all 405 corpus cases against the live `qwen2.5:7b-
+instruct` config specifically (not the historical era mix): 3/405 (0.7%)
+lost a whole sentence outright, none caught by the ratio, question, or
+profanity guards. Added `_lost_sentence()` to `_polish()` - a sentence
+counts as surviving only if at least half its content words (crude
+stemming, stopwords/filler and digits excluded so legitimate edits can't
+trip it) appear anywhere in the output; first failing sentence rejects the
+polish result (`polish_status=dropped_sentence`), raw text ships instead.
+Verified against the merged tree: exact reproduction of all 3 real drops,
+zero false fires across 405 replayed cases plus a separate 8-case random
+spot-check of legitimate edits.
+
+**Segment-parallel polish: no-go.** Investigated whether splitting a long
+dictation at pause boundaries and polishing the pieces in parallel (an
+idea raised while discussing streaming's true prerequisites) could cut
+polish's cost on long toggle dictations, which today's data showed
+dominates over Whisper on anything past ~60s of audio. Killed by a
+directly measured fact, not a guess: Ollama serializes requests on this
+machine (`OLLAMA_NUM_PARALLEL:1`, confirmed by real concurrent-call timing,
+not just the config line) - a 3-way split of a 2508-char dictation wall-
+clocked within 1-9% of one whole-transcript call, and each extra piece
+adds its own ~0.5-1s call overhead, so splitting can only add total GPU
+time under serialization. Quality was a secondary concern anyway: 2-3 of
+13 multi-piece test records showed real boundary damage (a mid-sentence
+continuation split into a dangling fragment), separate from restart-
+stammers, which never occurred across 16 boundaries tested. Net: nothing
+to gain on either axis. This also forced a correction to `mine_streaming`'s
+felt-latency table, which had quietly assumed working segment-polish -
+the real median toggle felt-latency win from streaming is close to zero:
+only the rare 60s+ dictation sees a meaningful gain, and only if segment-
+polish's boundary-damage risk gets accepted or mitigated. `mine_segment_
+polish.py` and `mine_ollama_parallel.py` added as the permanent record of
+this finding, matching the existing `mine_*.py` analysis-script family.
+
 ## 2026-08-27 — Capped polish generation length
 
 The dolphin-mistral runaway from today's replay ("Damn" -> 170s / 25k+

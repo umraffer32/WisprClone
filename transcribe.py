@@ -71,6 +71,60 @@ _SWEARS = re.compile(
     r"bitch(?:es|y)?|bastards?|crap(?:py)?|piss(?:ed|ing)?|dicks?|cocks?|"
     r"cunts?|pricks?|whores?|sluts?)\b")
 
+# The prompt's never-drop-sentences rule is the one qwen2.5 breaks most
+# quietly: a whole sentence vanishing from a multi-sentence dictation moves
+# the length ratio too little to trip min_ratio and needn't be a question
+# (405-case replay 2026-08-27: 3 whole-sentence drops, none caught by the
+# guards above). _lost_sentence backs that rule the way _SWEARS backs
+# profanity: a sentence counts as surviving only if at least half its
+# content words (or their crude stems, so "causing"->"caused" still
+# matches) appear anywhere in the output. Function words and fillers don't
+# count - polish removes those legitimately - and a stammered restart can't
+# false-fire because its words survive in the kept version of the phrase.
+# Digits don't count either: qwen reformats them ("830" -> "8:30"), which
+# only looks like a mismatch. Internal sanity thresholds, not config knobs.
+_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_GUARD_WORD = re.compile(r"[a-z']+")
+_GUARD_STOP = frozenset("""
+a an the and or but if so to of in on at for with by from as is are was were
+be been being am i you he she it we they me him her us them my your his its
+our their this that these those there here not no nor do does did doing have
+has had having will would can could should shall may might must what which
+who whom whose when where why how then than too very also just really
+actually basically literally kind sort course okay ok yeah yes well um uh
+erm hmm like know mean gonna wanna oh all some any more most other into out
+up down over under again once about because while during before after
+""".split())
+
+
+def _guard_stem(w):
+    for suf in ("ing", "ed", "es", "s", "ly"):
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            return w[:-len(suf)]
+    return w
+
+
+def _guard_words(s):
+    return [w for w in (t.strip("'") for t in _GUARD_WORD.findall(s.lower()))
+            if w and w not in _GUARD_STOP]
+
+
+def _lost_sentence(text, polished):
+    """First input sentence whose content didn't survive into polished
+    (under half its content words present), or None. Sentences with fewer
+    than 2 content words carry too little signal to judge and are skipped."""
+    out_words = set(_guard_words(polished))
+    out_stems = {_guard_stem(w) for w in out_words}
+    for sent in _SENT_SPLIT.split(text):
+        words = _guard_words(sent)
+        if len(words) < 2:
+            continue
+        hits = sum(1 for w in words
+                   if w in out_words or _guard_stem(w) in out_stems)
+        if hits / len(words) < 0.5:
+            return sent
+    return None
+
 log = logging.getLogger("wisprclone")
 
 # a machine-wide HTTP_PROXY would reroute the Ollama call (no automatic
@@ -640,6 +694,10 @@ class Transcriber(threading.Thread):
                 # counts, not presence: "shit" twice in, once out is a loss
                 log.warning("polish dropped profanity, using raw")
                 return text, "dropped_profanity"
+            lost = _lost_sentence(text, polished)
+            if lost:
+                log.warning("polish dropped a sentence (%r), using raw", lost)
+                return text, "dropped_sentence"
             return polished, "ok"
         except requests.Timeout:
             log.exception("polish timed out, using raw text")

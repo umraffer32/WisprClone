@@ -42,10 +42,14 @@ onboarding work unless explicitly asked.
   (`[retain]` in config.toml). Gitignored; see that section's comment for
   how to clear it out once the merge rule is decided.
 - `mine_vocab.py` / `mine_streaming.py` / `mine_merge_rule.py` /
-  `mine_polish.py` — offline analysis scripts over the logs above: personal
-  vocabulary → Whisper hotwords, the streaming pause-threshold pick, the
-  merge-rule simulation, and a polish-quality/filler audit. Run by hand,
-  summary output only.
+  `mine_polish.py` / `mine_segment_polish.py` / `mine_ollama_parallel.py` —
+  offline analysis scripts over the logs above: personal vocabulary →
+  Whisper hotwords, the streaming pause-threshold pick, the merge-rule
+  simulation, a polish-quality/filler audit, whether polishing pause-split
+  transcript pieces in isolation matches whole-transcript polish (settled
+  no for segment-parallel polish - see LOG.md), and Ollama's real request
+  concurrency on this machine (serializes - `OLLAMA_NUM_PARALLEL:1`). Run
+  by hand, summary output only.
 
 ## Launching and restarting — read before touching a running instance
 
