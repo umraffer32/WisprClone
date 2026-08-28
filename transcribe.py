@@ -276,6 +276,46 @@ def focused_text():
     return None
 
 
+# GUI_INMENUMODE | GUI_SYSTEMMENUMODE | GUI_POPUPMENUMODE (winuser.h)
+_GUI_MENU_FLAGS = 0x0004 | 0x0008 | 0x0010
+_MENU_CONTROL_TYPES = {50009, 50010, 50011}  # UIA Menu, MenuBar, MenuItem
+# How long a paste waits for an accidentally opened context menu to close
+# before giving up and offering click-to-repaste. Internal threshold: the
+# pill then shows for result_display_s, so recovery stays on screen well
+# past the wait.
+PASTE_BLOCK_WAIT_S = 5.0
+
+
+def paste_blocked():
+    """True while a popup menu owns input on the foreground thread - an
+    injected Ctrl+V would go to the menu, not the text field, and a stray
+    'v' can even activate a menu item. Native Win32 menus (Notepad,
+    Explorer, Electron apps) run a modal loop that sets the menu-mode
+    flags; Chromium and Firefox draw their own menu popups, which hold
+    mouse capture (that's how they dismiss on an outside click) and report
+    a menu-ish focused element via UI Automation."""
+    gti = _GUITHREADINFO()
+    gti.cbSize = ctypes.sizeof(gti)
+    if ctypes.windll.user32.GetGUIThreadInfo(0, ctypes.byref(gti)):
+        if gti.flags & _GUI_MENU_FLAGS or gti.hwndCapture:
+            return True
+    try:
+        return _get_uia().GetFocusedElement().CurrentControlType in _MENU_CONTROL_TYPES
+    except Exception:
+        return False
+
+
+def wait_paste_clear(timeout_s=PASTE_BLOCK_WAIT_S):
+    """Polls until no menu blocks the paste. Returns True when clear,
+    False when the menu outlasted the wait."""
+    deadline = time.monotonic() + timeout_s
+    while paste_blocked():
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.1)
+    return True
+
+
 class Status:
     """Shared state between worker, recorder, and the UI tick."""
 
@@ -801,6 +841,17 @@ class Transcriber(threading.Thread):
                 with open(self.history, "a", encoding="utf-8") as f:
                     f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {text}\n")
 
+                # A right-click mid-dictation leaves a context menu open
+                # over the target field. The menu eats the injected Ctrl+V,
+                # the clipboard restore wipes the text 300ms later, and the
+                # landed-check below stays quiet because the field behind
+                # the menu still owns its caret - the dictation vanished
+                # with no repaste offer (reported 2026-08-27). Wait out the
+                # menu (before the field read, so continuation sees the
+                # field, not the menu); if it outlasts the wait, skip the
+                # keystroke and offer click-to-repaste instead.
+                pastable = wait_paste_clear()
+
                 # Continuation, ground truth first: read the focused field
                 # via UIA. If its text still ends with our previous paste
                 # and that paste had no closing punctuation, the user is
@@ -829,9 +880,13 @@ class Transcriber(threading.Thread):
                 else:
                     joined = " " + text
 
-                t3 = self.clipboard.paste(joined)
-                if t3 is None:
-                    t3 = time.monotonic()  # clipboard busy - nothing was sent
+                if pastable:
+                    t3 = self.clipboard.paste(joined)
+                    if t3 is None:
+                        t3 = time.monotonic()  # clipboard busy - nothing was sent
+                else:
+                    log.warning("paste blocked by an open menu; offering repaste")
+                    t3 = time.monotonic()
                 # both logged only now so paste= reaches the Ctrl+V;
                 # mine_polish.py needs the diff block immediately before its
                 # job line (the continuation line would otherwise split them)
@@ -842,13 +897,18 @@ class Transcriber(threading.Thread):
                          "polish_status=%s paste=%.2fs",
                          len(audio) / 16000, t1 - t0, t2 - t1, job["mode"],
                          polish_status, t3 - t2)
-                self.last_hwnd = hwnd
-                self.last_tail = " ".join(text.split())[-60:]
-                self.last_ended_sentence = text[-1] in ".!?"
-                self.last_paste_ts = time.monotonic()
+                if pastable:
+                    # a skipped paste must not update continuation state:
+                    # the field never got this text, so the next dictation
+                    # should stitch (or not) against the last real paste
+                    self.last_hwnd = hwnd
+                    self.last_tail = " ".join(text.split())[-60:]
+                    self.last_ended_sentence = text[-1] in ".!?"
+                    self.last_paste_ts = time.monotonic()
 
                 # offer click-to-repaste only when the paste probably missed
-                if not (caret_visible() or focused_editable() or is_terminal()):
+                if not pastable or not (caret_visible() or focused_editable()
+                                        or is_terminal()):
                     self.status.result_until = time.monotonic() + self.result_display_s
 
                 # Streaming shadow (Phase A): log the segment bounds streaming

@@ -3,6 +3,36 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Fixed dictation loss from a menu opening mid-PTT
+
+Reported bug: holding PTT, accidentally right-clicking to open a context
+menu, and the whole dictation vanishing - no paste, no repaste pill,
+nothing logged. Root cause: an open menu (native Win32 modal loop, or a
+Chromium/Firefox popup) eats the injected Ctrl+V instead of the text
+field getting it, the 300ms clipboard restore then wipes the only copy,
+and the existing landed-check (`caret_visible()`) stayed quiet because
+the text field behind the menu never lost its caret - the check measures
+"an editable field is focused," which stayed true throughout, so it was
+never going to catch this. Deterministic, not a timing fluke: every
+affected dictation would have failed the same way.
+
+Ruled out a competing theory (right-click physically disturbing the held
+PTT button, discarding the recording before any paste attempt existed):
+the mouse hook filter early-returns on any button that isn't the
+configured PTT one, a system-wide low-level hook isn't affected by
+another process's own modal loop, and - decisively - that mechanism
+would predict a pasted fragment cut off at the right-click, not total
+silence, which contradicts the actual symptom.
+
+Fix: `paste_blocked()` in `transcribe.py` detects an open menu three ways
+(GUI menu-mode flags, mouse-capture ownership, UIA reporting a focused
+menu element - covers native Win32 and both browser-engine popup styles).
+The paste now waits up to 5s for the menu to clear before sending Ctrl+V;
+if it outlasts the wait, the keystroke is skipped entirely (a stray "v"
+can activate a menu item) and the repaste pill is forced instead, with
+continuation state left untouched so the next dictation still stitches
+against the last real paste, not a skipped one.
+
 ## 2026-08-27 — idle_close_s reverted 300 -> 10
 
 Raised earlier today over a clipping-risk theory: a reopened mic loses its
