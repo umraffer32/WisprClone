@@ -55,7 +55,7 @@ def affine_fit(xs, ys):
 def setting_row(recs, setting, whisper_ab, polish_ab):
     """Summary stats for one min_silence setting over toggle records."""
     wa, wb = whisper_ab
-    counts, lasts, felts, taxes, all_durs, blips = [], [], [], [], [], 0
+    counts, lasts, felts, wins, taxes, all_durs, blips = [], [], [], [], [], [], 0
     for rec in recs:
         if setting not in rec["segs"]:
             continue  # older record, predates this candidate setting
@@ -68,11 +68,17 @@ def setting_row(recs, setting, whisper_ab, polish_ab):
         counts.append(len(real))
         lasts.append(real[-1])
         felt = wa + wb * real[-1]
+        base = wa + wb * rec["audio_s"]  # today's pipeline: whisper the whole clip
         if polish_ab:
             pa, pb = polish_ab
-            # holdback proxy: polish only the final segment's share of chars
-            felt += pa + pb * rec["chars"] * real[-1] / sum(real)
+            # polish is whole-transcript only (segment-parallel ruled out
+            # 2026-08-27: Ollama serializes, blind pieces sever continuations),
+            # so it starts after the last chunk and costs the same either way
+            whole = pa + pb * rec["chars"]
+            felt += whole
+            base += whole
         felts.append(felt)
+        wins.append(base - felt)
         taxes.append((len(real) - 1) * wa)  # extra fixed cost vs one whole-clip pass
     if not counts:
         return None
@@ -81,6 +87,7 @@ def setting_row(recs, setting, whisper_ab, polish_ab):
             "short": np.mean([d < MERGE_S for d in all_durs]),
             "long": np.mean([d > FORCE_CUT_S for d in all_durs]),
             "med_last": np.median(lasts), "med_felt": np.median(felts),
+            "med_win": np.median(wins), "p90_win": np.percentile(wins, 90),
             "med_tax": np.median(taxes), "blips": blips}
 
 
@@ -120,9 +127,10 @@ def main():
         raise SystemExit("no toggle records yet - the tuning table needs them")
     print(f"\nper-setting table, up to {len(toggle)} toggle records each "
           "(n differs per row - newer candidate settings have fewer records; "
-          "felt = est. latency after you stop talking; tax = extra GPU s/dictation):")
+          "felt = est. latency after you stop talking; win = felt saved vs "
+          "today's whole-clip pipeline; tax = extra GPU s/dictation):")
     print(f"  {'ms':>5} {'n':>5} {'segs':>5} {'1seg':>5} {'<2s':>5} {'>25s':>5} "
-          f"{'last':>6} {'felt':>6} {'tax':>5} {'blips':>5}")
+          f"{'last':>6} {'felt':>6} {'win':>5} {'p90win':>6} {'tax':>5} {'blips':>5}")
     all_settings = sorted({s for r in toggle for s in r["segs"]}, key=int)
     for setting in all_settings:
         row = setting_row(toggle, setting, whisper_ab, polish_ab)
@@ -130,7 +138,8 @@ def main():
             continue
         print(f"  {setting:>5} {row['n']:>5} {row['med_segs']:>5.1f} {row['one_seg']:>5.0%} "
               f"{row['short']:>5.0%} {row['long']:>5.0%} {row['med_last']:>5.1f}s "
-              f"{row['med_felt']:>5.1f}s {row['med_tax']:>4.1f}s {row['blips']:>5}")
+              f"{row['med_felt']:>5.1f}s {row['med_win']:>4.1f}s {row['p90_win']:>5.1f}s "
+              f"{row['med_tax']:>4.1f}s {row['blips']:>5}")
 
 
 if __name__ == "__main__":

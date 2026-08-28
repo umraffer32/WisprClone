@@ -33,14 +33,16 @@ onboarding work unless explicitly asked.
   counter. `wisprclone.log` (1MB rotating) holds diagnostics and per-job
   timing lines (`job: audio=… whisper=… polish=… mode=… polish_status=…
   paste=…`) plus raw/out diffs whenever polish or clean_text changes text.
-- `vad_shadow.log` — streaming-branch diagnostic only: one JSON line per
-  dictation with the Silero segment bounds streaming would have used
-  (300/400/500/700/1000ms candidates). Gitignored via `*.log`; goes away
-  with the shadow when real streaming lands.
-- `retained_audio/` — temporary experiment data for the streaming merge-rule
-  decision, not a feature: each dictation's audio, capped and auto-pruned
-  (`[retain]` in config.toml). Gitignored; see that section's comment for
-  how to clear it out once the merge rule is decided.
+- `vad_shadow.log` — one JSON line per dictation with the Silero segment
+  bounds a streaming implementation would have used (300/400/500/700/1000ms
+  candidates). Gitignored via `*.log`. Real streaming is shelved (see
+  LOG.md 2026-08-27) - corrected felt-latency numbers showed a ~0.14s
+  median win, not worth the build. Left running rather than torn out in
+  case 60s+ dictations become common enough to reopen the question.
+- `retained_audio/` — real dictation audio, capped and auto-pruned
+  (`[retain]` in config.toml), collected for the now-shelved streaming
+  merge-rule decision. Gitignored; see that section's comment for how to
+  clear it out if it's not worth keeping around unused.
 - `mine_vocab.py` / `mine_streaming.py` / `mine_merge_rule.py` /
   `mine_polish.py` / `mine_segment_polish.py` / `mine_ollama_parallel.py` —
   offline analysis scripts over the logs above: personal vocabulary →

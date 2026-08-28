@@ -3,6 +3,54 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Real streaming shelved
+
+The multi-day streaming plan (Silero VAD chunking during recording so
+Whisper starts transcribing before the user stops talking) never got a
+firm go/no-go. Today's segment-parallel-polish work exposed that
+`mine_streaming.py`'s felt-latency model was wrong in a way that mattered
+to that decision: its formula charged polish only against the final
+chunk's share of characters, quietly assuming per-segment polish already
+worked - the same assumption the segment-polish experiment just ruled out.
+The correction was described in prose in that entry but never actually
+made in the script.
+
+Fixed the formula (`mine_streaming.py`): polish is whole-transcript only
+(no viable alternative - segment-parallel doesn't parallelize, since
+Ollama serializes requests on this machine, and blind per-piece polish
+severs continuations at the cut), so it costs the same with or without
+streaming and now gets charged in full on both sides. Added an explicit
+`win` column (felt latency saved vs today's pipeline) instead of an
+unanchored absolute number. Re-run over 160 real toggle records:
+
+    ms   win  p90win
+   300   0.2s   0.7s
+   400   0.2s   0.6s
+   500   0.1s   0.7s
+   700   0.0s   0.7s
+  1000   0.0s   0.4s
+
+At the 500ms front-runner, median win is 0.14s and only 13/160 toggles
+(8%, all 100s+ dictations) save more than a second. The old table implied
+roughly 4x that. Considered and rejected redoing the pause-threshold pick
+against Whisper's own segment timestamps instead of Silero: a live
+chunker has to decide where to cut *before* transcribing, so Whisper
+timestamps (which only exist after a chunk is transcribed) were never a
+usable signal for this - Silero remains correct, the 500ms pick stands.
+
+Decision: shelve the streaming build. The corrected win doesn't clear the
+cost of a live VAD chunker in the audio path (chunk-boundary risk, the
+still-unsettled merge rule, mid-stream failure handling) in the
+most correctness-critical part of the app. `vad_shadow.log` and
+`retained_audio/` are left running rather than torn out, in case 60s+
+dictations become common enough to reopen this - see their updated
+CLAUDE.md/config.toml notes. The one path that could still matter later:
+polishing earlier chunks *while the user is still talking* (distinct from
+the already-dead parallel-after-stop design) isn't blocked by Ollama's
+serialization, only by the same boundary-quality risk - worth a right-
+context-aware redesign of `mine_segment_polish.py` before ever revisiting,
+not a reason to reopen this decision as-is.
+
 ## 2026-08-27 — Sentence-drop guard added; segment-parallel polish ruled out
 
 Two things prompted by the same day's earlier finding: today's 405-case
