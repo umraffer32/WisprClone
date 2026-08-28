@@ -848,11 +848,14 @@ class Transcriber(threading.Thread):
                 # cleared, or hand-edited field simply fails the match and
                 # starts fresh. Fields that expose no text fall back to the
                 # blind heuristic (same window within continuation_gap_s).
-                # Terminals never stitch: a period would corrupt a command.
+                # Terminals never stitch (a period would corrupt a command)
+                # and skip the read: their UIA text is the whole viewport,
+                # not the input line.
                 hwnd = ctypes.windll.user32.GetForegroundWindow()
+                terminal = is_terminal()
+                field = None if terminal else focused_text()
                 stitch = False
-                if not self.last_ended_sentence and not is_terminal():
-                    field = focused_text()
+                if not self.last_ended_sentence and not terminal:
                     if field is not None:
                         stitch = bool(self.last_tail) and \
                             " ".join(field.split()).endswith(self.last_tail)
@@ -862,10 +865,18 @@ class Transcriber(threading.Thread):
                                   < self.continuation_gap_s)
                     log.info("continuation: %s stitch=%s",
                              "field-read" if field is not None else "blind", stitch)
+                # The same field read decides the leading space: pasting
+                # after existing content needs one so words don't run
+                # together, but an empty field - or one already ending in
+                # whitespace - doesn't. Keying this off "first dictation
+                # since launch" instead put a stray space at the start of
+                # every fresh chat box (reported 2026-08-27). An unreadable
+                # field keeps the space: a stray space is invisible and
+                # send boxes trim it, glued words corrupt the dictation.
                 if stitch:
                     joined = ". " + text
-                elif self.last_hwnd is None:
-                    joined = text  # very first dictation - nothing to bridge from
+                elif field is not None and (not field or field[-1].isspace()):
+                    joined = text
                 else:
                     joined = " " + text
 

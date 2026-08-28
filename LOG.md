@@ -3,7 +3,29 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
-## 2026-08-27 — Menu-blocked paste always offers the pill, never auto-pastes
+## 2026-08-27 — Fixed a stray leading space on nearly every paste
+
+Reported bug: dictated text almost always started with a space, invisible
+in a chat box that trims on send, but genuinely there. Root cause: the
+leading-space decision was keyed off `self.last_hwnd is None` - true
+exactly once, on the very first dictation since the app started - not off
+whether the destination field actually had anything in it. Every
+dictation after the first got a bare space prepended unconditionally,
+empty field or not.
+
+Fix: the continuation-stitch logic already reads the focused field's real
+text via UI Automation, so that same read now decides the leading space
+too - no space for an empty or already-whitespace-terminated field, a
+space when the field genuinely has trailing content to separate from. The
+`last_hwnd is None` special case is gone entirely; it was also subtly
+wrong, since it skipped the space even when the very first dictation of a
+session landed in a field with real prior content. An unreadable field
+(no UIA text pattern - the same population the stitch logic already falls
+back on) keeps the old always-space behavior, since a stray space is
+harmless where a chat box trims it, but a missing one glues words
+together and needs hand-editing. Terminals are unaffected: their UIA text
+is the whole viewport, not the input line, so they never read the field
+and keep pasting with a space, same as before.
 
 Live-tested the menu-blocked-paste fix below the same day and refined it
 on the spot. The first version polled up to 5s for the menu to close,
