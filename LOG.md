@@ -3,6 +3,39 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-28 — Guarded the `av` import against Smart App Control blocks
+
+Windows Smart App Control started blocking `av\audio\frame.pyd` (PyAV, a
+faster_whisper dependency) this morning with no local trigger - no Windows
+update, no file change, same file that had run clean for a week. Checked
+the Code Integrity event log: that file had never been blocked before
+today. A Fable deep-dive confirmed this is documented Smart App Control
+behavior, not a bug - cloud reputation verdicts on unsigned binaries get
+cached with an expiry and requeried around reboot/logon, so a previously-
+fine file can flip to blocked (or back) with no local cause. Also
+confirmed against Microsoft's own docs: no per-app allowlist or
+supplemental-policy exception exists for it, so turning Smart App Control
+off entirely was the only lever on that side.
+
+Narrower fix: `av` is only used by faster_whisper's `decode_audio()`,
+which this app never calls - every `transcribe()` call here passes a
+numpy array from the mic, never a file path. Added a try/except around
+`import av` in transcribe.py that stubs a placeholder module into
+`sys.modules` if the real import fails, so faster_whisper's own `import
+av` succeeds against the stub instead of crashing the app at startup.
+Logs a warning with the real exception text when the stub kicks in,
+silent otherwise.
+
+Tested against the live block (still active at commit time - it had moved
+to `av\codec\codec.pyd` by then, confirming it roams within the package
+rather than sticking to one file) and a simulated block, plus a silent-
+pass check when `av` imports normally. Restarted the real running
+instance afterward and confirmed a clean `started` line in
+wisprclone.log instead of the crash. Doesn't cover other unsigned
+binaries in the venv (ctranslate2, onnxruntime) if Smart App Control ever
+targets one of those instead - no stub is possible there, since they're
+load-bearing.
+
 ## 2026-08-27 — Fixed a stray leading space on nearly every paste
 
 Reported bug: dictated text almost always started with a space, invisible

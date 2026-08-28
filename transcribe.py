@@ -25,6 +25,20 @@ for _sub in ("cublas", "cudnn"):
         os.add_dll_directory(str(_d))
         os.environ["PATH"] = str(_d) + os.pathsep + os.environ["PATH"]
 
+# Smart App Control can revoke a previously-fine unsigned binary's reputation
+# at any time - it has intermittently blocked av\audio\frame.pyd (PyAV),
+# which faster_whisper imports at module level, so the whole app died at
+# startup. PyAV only backs faster_whisper's decode_audio(), and every
+# transcribe() call here passes a numpy array from the mic, never a file, so
+# a stub module in its place loses nothing.
+try:
+    import av
+except (ImportError, OSError) as _e:
+    import types
+    sys.modules["av"] = types.ModuleType("av")
+    logging.getLogger("wisprclone").warning(
+        "import av failed (%s); stubbed it so faster_whisper can load", _e)
+
 import numpy as np
 import pywintypes
 import requests
