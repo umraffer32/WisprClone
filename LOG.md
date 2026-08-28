@@ -3,6 +3,15 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-28 — Restored wisprclone.ico
+
+The Aug 24 cleanup pass (see below) removed this as an "unused tray icon
+asset" after confirming the tray icon is drawn live in `ui.py`, not loaded
+from a file - true, but the sweep only checked the repo, and the Desktop
+shortcut's `IconLocation` still points at this exact path. Missed because
+that reference lives outside the repo, so nothing in-repo would surface
+it. Desktop icon went blank until this got restored from git history.
+
 ## 2026-08-28 — Guarded the `av` import against Smart App Control blocks
 
 Windows Smart App Control started blocking `av\audio\frame.pyd` (PyAV, a
