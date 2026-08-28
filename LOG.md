@@ -3,6 +3,28 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-27 — Menu-blocked paste always offers the pill, never auto-pastes
+
+Live-tested the menu-blocked-paste fix below the same day and refined it
+on the spot. The first version polled up to 5s for the menu to close,
+then auto-pasted the instant it cleared. Real usage doesn't work that
+way: the actual sequence is notice the stray right-click, stop talking,
+close the menu - and at that point the interrupted dictation should be
+something to click on, not text landing unprompted the moment the menu
+happens to clear.
+
+Simplified rather than added a third state: since "menu cleared during
+the wait" and "menu outlasted the wait" now want the identical outcome
+(skip the keystroke, force the repaste pill), the poll loop had nothing
+left to decide - `wait_paste_clear()` and its 5s threshold were deleted
+entirely in favor of one instantaneous `paste_blocked()` check at paste
+time. Side benefit, not just simpler: the pill now appears immediately
+instead of up to 5s late. A menu that opens and fully closes before
+transcription finishes is still invisible to this (same as before -
+detecting that would mean tracking menu state through the whole
+recording, not just at paste time), but that's a much narrower window
+than the case this exists for.
+
 ## 2026-08-27 — Fixed dictation loss from a menu opening mid-PTT
 
 Reported bug: holding PTT, accidentally right-clicking to open a context

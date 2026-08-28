@@ -279,11 +279,6 @@ def focused_text():
 # GUI_INMENUMODE | GUI_SYSTEMMENUMODE | GUI_POPUPMENUMODE (winuser.h)
 _GUI_MENU_FLAGS = 0x0004 | 0x0008 | 0x0010
 _MENU_CONTROL_TYPES = {50009, 50010, 50011}  # UIA Menu, MenuBar, MenuItem
-# How long a paste waits for an accidentally opened context menu to close
-# before giving up and offering click-to-repaste. Internal threshold: the
-# pill then shows for result_display_s, so recovery stays on screen well
-# past the wait.
-PASTE_BLOCK_WAIT_S = 5.0
 
 
 def paste_blocked():
@@ -303,17 +298,6 @@ def paste_blocked():
         return _get_uia().GetFocusedElement().CurrentControlType in _MENU_CONTROL_TYPES
     except Exception:
         return False
-
-
-def wait_paste_clear(timeout_s=PASTE_BLOCK_WAIT_S):
-    """Polls until no menu blocks the paste. Returns True when clear,
-    False when the menu outlasted the wait."""
-    deadline = time.monotonic() + timeout_s
-    while paste_blocked():
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(0.1)
-    return True
 
 
 class Status:
@@ -846,11 +830,16 @@ class Transcriber(threading.Thread):
                 # the clipboard restore wipes the text 300ms later, and the
                 # landed-check below stays quiet because the field behind
                 # the menu still owns its caret - the dictation vanished
-                # with no repaste offer (reported 2026-08-27). Wait out the
-                # menu (before the field read, so continuation sees the
-                # field, not the menu); if it outlasts the wait, skip the
-                # keystroke and offer click-to-repaste instead.
-                pastable = wait_paste_clear()
+                # with no repaste offer (reported 2026-08-27). If a menu is
+                # up now, skip the keystroke and offer click-to-repaste.
+                # The first fix polled up to 5s and auto-pasted the moment
+                # the menu closed; reverted same day. The real sequence is
+                # notice the stray right-click, stop talking, close the
+                # menu - and at that point the interrupted dictation should
+                # be an option to click, not text that lands unprompted the
+                # instant the menu happens to clear. So a menu open at
+                # paste time always means the pill, immediately.
+                pastable = not paste_blocked()
 
                 # Continuation, ground truth first: read the focused field
                 # via UIA. If its text still ends with our previous paste
