@@ -156,7 +156,8 @@ def main():
 
     days = Counter(p["ts"][:10] for p in pairs)
     fdays = Counter(p["ts"][:10] for p, _ in flagged)
-    print("\npairs per day (model swapped qwen -> dolphin-mistral 2026-08-25):")
+    print("\npairs per day (model: qwen through 8/24, dolphin-mistral 8/25-8/26, "
+          "back to qwen 8/27+):")
     for day in sorted(days):
         print(f"  {day}  {days[day]:>4}  flagged {fdays.get(day, 0)}")
 
