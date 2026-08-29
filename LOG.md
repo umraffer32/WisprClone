@@ -3,6 +3,35 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-28 — Polish downsized to qwen2.5:3b-instruct for speed
+
+The two earlier polish-model swaps (qwen -> dolphin-mistral -> qwen) were
+both about correctness - profanity sanitizing, no-op rate. This one is
+purely about latency: while testing dictation feel, polish was consistently
+the larger half of total processing time, and unlike whisper (whose cost
+scales with audio length and was already about as fast as it gets),
+polish's cost is really about which model answers the call.
+
+Replayed the current corpus (232 raw dictations - log rotation had eaten
+the rest of the original 405 used for the qwen-vs-dolphin decision) through
+`qwen2.5:3b-instruct` with `_polish`'s exact prompt and options, scored the
+same way that decision was: qwen2.5:7b no-opped 31% of the time; the 3b
+model no-opped only 13% - it edits more, not less, so it doesn't fail the
+dolphin way. Mean latency 0.63s vs 7b's ~1.4s, roughly half. 8% of its
+edits tripped a `mine_polish.py`-style quality flag (mostly a crude
+sentence-count check, plus 4 dropped swears out of 201 edits) - the live
+swear-count/dropped-question/ratio/`_lost_sentence` guards already catch
+all of those and fall back to raw, so the real cost is polish occasionally
+not firing, not corrupted output.
+
+Confirmed live, not just in the replay: a real 24.4s toggle-mode dictation
+right after the switch polished in 0.77s, versus 1.36s for a 23.6s
+dictation on 7b earlier the same night - nearly identical audio length,
+nearly half the polish time. `qwen2.5:7b-instruct` stays pulled in Ollama
+in case this needs reverting. The replay script (`mine_polish_3b.py`) is
+not committed yet - it's a genuinely reusable comparison tool in the same
+`mine_*.py` mold, but that's a separate decision from this swap.
+
 ## 2026-08-28 — Restored wisprclone.ico
 
 The Aug 24 cleanup pass (see below) removed this as an "unused tray icon
