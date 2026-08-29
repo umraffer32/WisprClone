@@ -3,6 +3,27 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-29 — Added BUGS.md, backfilled from this file's full history
+
+Prompted by today's NVIDIA driver crash finding having nowhere to live - no
+code changed, so it had no natural commit to hang a LOG.md entry off of. It's
+in BUGS.md instead, not here. BUGS.md
+is the fix: a standing file for bugs and incidents, whether or not they
+produced a commit, separate from this file's commit-keyed decision log.
+
+Full backfill, not just going forward: one Fable pass read all of LOG.md
+(955 lines, 08-21 through 08-29) and pulled every genuine bug/incident into
+BUGS.md, newest first, each with symptom, root cause, fix, and status. A
+second, independent Fable pass re-read LOG.md and the real git log fresh,
+built its own list blind, and audited the first pass's draft against it -
+checking for omissions, miscategorized entries, wrong commit hashes, and
+wrong status labels. Verdict: zero factual, hash, or status errors across
+34 entries, ship as-is, with three optional nits (all addressed by hand
+before merge: trimmed one added claim the ground truth hadn't stated, added
+one thin entry the audit flagged as missing, left one borderline inclusion
+as judgment). CLAUDE.md now documents the two-pass process as the standard
+for any future large rewrite of either file.
+
 ## 2026-08-29 — Moved the mine_*.py scripts into analysis_tools/
 
 Purely organizational, prompted by wanting the repo's file listing to stop

@@ -88,6 +88,13 @@ a failed polish must never lose a dictation). Always address it as
 
 - Append an entry to LOG.md with any meaningful commit: what changed and why,
   including testing results and reversals. Decision-level, not diff narration.
+- A bug or incident gets an entry in BUGS.md, whether or not it produced a
+  commit. LOG.md is commit-keyed and only covers changes; BUGS.md is the
+  failure history, including things diagnosed with no code fix (a driver
+  update crashing the app, say). Added 2026-08-29, backfilled from all of
+  LOG.md's history via two independent Fable passes (one drafts, one audits
+  the draft against LOG.md and git history fresh) - keep using both passes
+  for any future large rewrite of either file.
 - Keep commit messages short: one imperative line by default, or up to a
   couple one-sentence bullets if a commit genuinely bundles multiple
   changes. Never a paragraph-plus-sub-bullets per file - that detail goes
