@@ -9,7 +9,8 @@ is useless if the suspicious cases can't be read.
 
 Two caveats on what the data can show. The raw side is post-clean_text(),
 so the filler table counts what the regexes MISSED or deliberately left
-(bare "you know", comma-separated repeats), not his habits before cleanup.
+(bare "you know", comma-separated repeats below 4x), not his habits before
+cleanup.
 And a pair only exists when polish's output was accepted - guard vetoes and
 failures fall back to raw and log no diff - so the pair audit judges only
 accepted edits; the polish_status table at the end covers how often polish
@@ -57,7 +58,7 @@ FILLERS = [(name, re.compile(pat, re.IGNORECASE)) for name, pat in (
 )]
 
 _BARE_REPEAT = re.compile(r"\b(\w+)\s+\1\b", re.IGNORECASE)   # _STUTTER's target
-_COMMA_REPEAT = re.compile(r"\b(\w+),\s+\1\b", re.IGNORECASE)  # protected by design
+_COMMA_REPEAT = re.compile(r"\b(\w+),\s+\1\b", re.IGNORECASE)  # protected below 4x
 # closing quotes/brackets may sit between the punctuation and the space
 # ('...say "genre mix." What...') - without them that period goes uncounted
 _SENTENCE_END = re.compile(r"[.!?]+[\"')\]]*(?:\s|$)")
@@ -191,8 +192,8 @@ def main():
           "emphasis-protected):")
     for w, n in bare.most_common(10):
         print(f"    {n:>4}  {w} {w}")
-    print("  comma-separated repeats (left alone by design; candidates for "
-          "emphasis_words.txt or the polish stammer rule):")
+    print("  comma-separated repeats (left alone below 4x by design; candidates "
+          "for emphasis_words.txt or the polish stammer rule):")
     for w, n in comma.most_common(10):
         print(f"    {n:>4}  {w}, {w}")
 

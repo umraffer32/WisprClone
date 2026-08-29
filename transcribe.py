@@ -194,6 +194,29 @@ _YOU_KNOW = re.compile(r",\s*you know\s*,?|(?<![\w-])you know\s*,", re.IGNORECAS
 # Residual trade-off: fast, no-pause emphasis ("very very important") still
 # collapses, since there's no punctuation to tell it apart from a stutter.
 _STUTTER = re.compile(r"\b(\w+)(?:\s+\1\b)+", re.IGNORECASE)
+# Whisper occasionally hallucinates one word repeated dozens of times with a
+# comma after each ("Xeon, Xeon, Xeon, ..." x73, 2026-08-28) - the commas make
+# it read as emphasis to _STUTTER, so it sailed through untouched. This
+# collapses 4+ exact repeats of the same word, comma-separated or not, down to
+# the first occurrence (keeping its casing via the backreference). Kept
+# separate from _STUTTER because a real spoken triple ("no, no, no",
+# 2026-08-25) is a confirmed legitimate case that must not be touched: the
+# whole log corpus tops out at 3x for real speech, and the only hallucination
+# seen was 73x, with nothing in between - so 4 is the threshold.
+_RUNAWAY_REPEAT = re.compile(r"\b(\w+)\b(?:[\s,]+\1\b){3,}", re.IGNORECASE)
+
+
+def _collapse_runaway(m, protected):
+    # an emphasis_words.txt word is exempt here too, same as in _STUTTER -
+    # the speaker opted this word out of repeat-collapsing outright, and a
+    # run they asked for isn't a hallucination worth a warning
+    if m.group(1).lower() in protected:
+        return m.group(0)
+    log.warning("hallucinated repeat run: %r x%d collapsed to one",
+                m.group(1), len(re.split(r"[\s,]+", m.group(0))))
+    return m.group(1)
+
+
 # Drops a leading "and" that starts a sentence ("And I went" -> "I went"),
 # keeping whatever anchored the match (start of text, or ". ") so the next
 # word still gets capitalized below. "and" mid-sentence is left alone - it's
@@ -361,8 +384,8 @@ def clean_text(text, corrections_path, emphasis_path):
     text = _YOU_KNOW.sub(" ", text)
     # emphasis_words.txt is re-read each job, same as corrections.txt, so a
     # word added mid-session takes effect without a restart. A word on this
-    # list is never collapsed by _STUTTER, comma or not - the speaker said
-    # outright that this word gets doubled on purpose.
+    # list is never collapsed by _STUTTER or _RUNAWAY_REPEAT, comma or not -
+    # the speaker said outright that this word gets doubled on purpose.
     protected = set()
     try:
         for line in Path(emphasis_path).read_text(encoding="utf-8").splitlines():
@@ -371,6 +394,10 @@ def clean_text(text, corrections_path, emphasis_path):
                 protected.add(word.lower())
     except OSError:
         pass
+    # before _STUTTER on purpose: it needs to see the full run, or _STUTTER
+    # collapsing any comma-free pairs inside a mixed run first could shrink
+    # it below the 4x threshold
+    text = _RUNAWAY_REPEAT.sub(lambda m: _collapse_runaway(m, protected), text)
     text = _STUTTER.sub(
         lambda m: m.group(0) if m.group(1).lower() in protected else m.group(1),
         text)

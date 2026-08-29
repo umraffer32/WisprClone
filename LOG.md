@@ -3,6 +3,49 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-29 — Runaway-repeat guard for Whisper hallucination loops ("the Xeon bug")
+
+Whisper occasionally hallucinates a word repeated dozens of times in a row,
+comma-separated - the 2026-08-28 case was "Xeon" x73. `_STUTTER` is
+deliberately written to skip comma-separated repeats (so real emphasis like
+"very, very important" survives), which means it read the hallucination as
+emphasis and let all 73 through untouched. Not a new failure mode either:
+an earlier entry below (2026-08-23) shows the exact same thing happening
+with "Let this happen" x4, "fixed" at the time with trailing-silence trim
+and `condition_on_previous_text=False` - both still in place, evidently not
+sufficient on their own.
+
+Checked the actual corpus before picking a threshold rather than guessing:
+every exact-repeat run in the whole log tops out at 3x for real speech
+("no, no, no", genuine emphasis) and jumps straight to 73x for the one
+hallucination - nothing has ever happened in between, including at exactly
+4x (a synthetic test, since no real case sits there). New `_RUNAWAY_REPEAT`
+regex in `transcribe.py` collapses 4+ exact repeats of the same word, comma
+or not, down to one, and logs a warning naming the word and count so a
+future occurrence shows up in wisprclone.log directly. Kept as a separate
+pattern from `_STUTTER` rather than extending it, per this repo's
+one-quirk-per-pattern rule for `clean_text()`.
+
+Caught in review before merging, not after: the first draft ran before
+`emphasis_words.txt` even loaded, so a word on that list (which exists
+specifically so `_STUTTER` never touches a word the speaker doubles on
+purpose) would still have been silently collapsed by the new guard if it
+ever hit 4+ repeats. The live file actually contains "no" - a real
+"no, no, no, no" would have been mangled despite the explicit opt-out.
+Fixed: `emphasis_words.txt` now loads before the runaway-repeat substitution
+and a protected word is exempt from it exactly like `_STUTTER`, with no
+warning logged either, since a run the speaker asked for isn't a
+hallucination.
+
+Verified against real log data both before and after the emphasis fix: the
+real 73x Xeon case still collapses correctly, the real "no, no, no" (3x)
+and "easily, easily" (2x) still survive untouched, the exact-4x boundary
+collapses, normal `_STUTTER` behavior is unaffected, and a protected word
+at 4+ repeats now survives with zero warning while an unprotected one at
+the same count still collapses and logs. `mine_polish.py`'s audit text
+updated in three places to say "below 4x" instead of unconditionally, so
+its own claims about what's left alone stay accurate.
+
 ## 2026-08-28 — Polish downsized to qwen2.5:3b-instruct for speed
 
 The two earlier polish-model swaps (qwen -> dolphin-mistral -> qwen) were

@@ -27,8 +27,9 @@ onboarding work unless explicitly asked.
   gitignored `pill_pos.txt`) and tray icon/menu.
 - `config.toml` — all knobs. The app must be restarted to pick up changes.
 - `corrections.txt` — wrong=right word fixes, applied live (no restart).
-- `emphasis_words.txt` — words never collapsed by the stutter-cleanup regex
-  (comma or not), one per line, applied live (no restart).
+- `emphasis_words.txt` — words never collapsed by the stutter-cleanup or
+  runaway-repeat regexes (comma or not), one per line, applied live (no
+  restart).
 - `history.log` — every pasted dictation, timestamped. Seeds the tray word
   counter. `wisprclone.log` (1MB rotating) holds diagnostics and per-job
   timing lines (`job: audio=… whisper=… polish=… mode=… polish_status=…

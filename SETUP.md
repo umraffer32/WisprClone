@@ -69,7 +69,7 @@ Each line is `wrong=right`, whole-word and case-insensitive, applied live with n
 
 ## Personalizing emphasis_words.txt
 
-The regex cleanup step collapses an immediate repeated word ("the the mic" -> "the mic"), which also means it'll eat a word you doubled on purpose for emphasis ("this is very, very good") unless Whisper happens to punctuate your pause with a comma. Same setup as corrections.txt:
+The regex cleanup step collapses an immediate repeated word ("the the mic" -> "the mic"), which also means it'll eat a word you doubled on purpose for emphasis ("this is very, very good") unless Whisper happens to punctuate your pause with a comma. A second regex collapses 4-or-more exact repeats of the same word regardless of commas, aimed at Whisper's occasional hallucination loops rather than real speech — a word on this list is exempt from both. Same setup as corrections.txt:
 
 ```powershell
 Copy-Item emphasis_words.txt.example emphasis_words.txt
