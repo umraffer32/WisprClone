@@ -29,8 +29,8 @@ right after the switch polished in 0.77s, versus 1.36s for a 23.6s
 dictation on 7b earlier the same night - nearly identical audio length,
 nearly half the polish time. `qwen2.5:7b-instruct` stays pulled in Ollama
 in case this needs reverting. The replay script (`mine_polish_3b.py`) is
-not committed yet - it's a genuinely reusable comparison tool in the same
-`mine_*.py` mold, but that's a separate decision from this swap.
+now committed too - a genuinely reusable comparison tool in the same
+`mine_*.py` mold for the next time a model swap needs judging.
 
 ## 2026-08-28 — Restored wisprclone.ico
 

@@ -44,12 +44,14 @@ onboarding work unless explicitly asked.
   merge-rule decision. Gitignored; see that section's comment for how to
   clear it out if it's not worth keeping around unused.
 - `mine_vocab.py` / `mine_streaming.py` / `mine_merge_rule.py` /
-  `mine_polish.py` / `mine_segment_polish.py` / `mine_ollama_parallel.py` —
-  offline analysis scripts over the logs above: personal vocabulary →
-  Whisper hotwords, the streaming pause-threshold pick, the merge-rule
-  simulation, a polish-quality/filler audit, whether polishing pause-split
-  transcript pieces in isolation matches whole-transcript polish (settled
-  no for segment-parallel polish - see LOG.md), and Ollama's real request
+  `mine_polish.py` / `mine_polish_3b.py` / `mine_segment_polish.py` /
+  `mine_ollama_parallel.py` — offline analysis scripts over the logs above:
+  personal vocabulary → Whisper hotwords, the streaming pause-threshold
+  pick, the merge-rule simulation, a polish-quality/filler audit, the same
+  audit replayed through a smaller polish model to judge a downsize (see
+  LOG.md 2026-08-28), whether polishing pause-split transcript pieces in
+  isolation matches whole-transcript polish (settled no for
+  segment-parallel polish - see LOG.md), and Ollama's real request
   concurrency on this machine (serializes - `OLLAMA_NUM_PARALLEL:1`). Run
   by hand, summary output only.
 
