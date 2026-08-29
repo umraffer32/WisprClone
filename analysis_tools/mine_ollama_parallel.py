@@ -8,7 +8,7 @@ the exact request shape transcribe._polish uses (model, temp 0, num_ctx
 equal-ish dictation lines from history.log, then plays the actual
 Direction-B trade: one long transcript polished whole vs split in three
 and fired concurrently. Summary numbers only. Optional argv[1] points at
-a checkout holding config.toml + history.log (default: this directory).
+a checkout holding config.toml + history.log (default: the repo root).
 """
 
 import re
@@ -20,9 +20,10 @@ from pathlib import Path
 
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent.parent))  # transcribe.py lives in the repo root
 from transcribe import POLISH_PROMPT
 
-BASE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent
+BASE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
 _HISTORY_LINE = re.compile(r"^\[[^\]]+\] (.*)$")
 
 _s = requests.Session()

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent.parent
 BLIP_S = 0.2        # segments shorter than this are mouth noise, not speech
 MERGE_S = 2.0       # segments under this feed the merge-rule question
 FORCE_CUT_S = 25.0  # segments past this would need a force-cut in streaming

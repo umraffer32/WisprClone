@@ -44,10 +44,15 @@ onboarding work unless explicitly asked.
   (`[retain]` in config.toml), collected for the now-shelved streaming
   merge-rule decision. Gitignored; see that section's comment for how to
   clear it out if it's not worth keeping around unused.
-- `mine_vocab.py` / `mine_streaming.py` / `mine_merge_rule.py` /
-  `mine_polish.py` / `mine_polish_3b.py` / `mine_segment_polish.py` /
-  `mine_ollama_parallel.py` — offline analysis scripts over the logs above:
-  personal vocabulary → Whisper hotwords, the streaming pause-threshold
+- `analysis_tools/` — `mine_vocab.py` / `mine_streaming.py` /
+  `mine_merge_rule.py` / `mine_polish.py` / `mine_polish_3b.py` /
+  `mine_segment_polish.py` / `mine_ollama_parallel.py`: offline analysis
+  scripts over the logs above, moved into their own directory 2026-08-29 to
+  separate them from the app itself. Each still finds the repo root's
+  `wisprclone.log`/`config.toml`/etc. via `BASE = Path(__file__).parent.parent`,
+  and the three that import `transcribe.py` add the repo root to `sys.path`
+  first, since it no longer sits next to them. Personal vocabulary → Whisper
+  hotwords, the streaming pause-threshold
   pick, the merge-rule simulation, a polish-quality/filler audit, the same
   audit replayed through a smaller polish model to judge a downsize (see
   LOG.md 2026-08-28), whether polishing pause-split transcript pieces in

@@ -22,7 +22,7 @@ counted by piece length, and every diverging record gets the control
 re-polished once so temp-0 GPU nondeterminism has its own measured floor.
 Per-call timings feed the felt-latency correction. Optional argv[1] points
 at a checkout holding config.toml + vad_shadow.log + retained_audio/
-(default: this script's directory).
+(default: the repo root).
 """
 
 import difflib
@@ -37,9 +37,10 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).parent.parent))  # transcribe.py lives in the repo root
 from transcribe import Status, Transcriber, clean_text
 
-BASE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent
+BASE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
 GAP_S = 0.5    # pause that opens a piece boundary; the mining front-runner
 SHORT_S = 2.0  # a piece keeps absorbing until it holds this much speech
                # (mine_streaming's MERGE_S / mine_merge_rule's SHORT_S)

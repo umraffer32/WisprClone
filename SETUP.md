@@ -55,7 +55,7 @@ One trap to avoid: never launch `pythonw.exe wisprclone.py` directly. It skips t
 The shipped `config.toml` has inline comments explaining every knob, so I won't repeat all of them here — just the two choices worth knowing the reasoning behind:
 
 - **Model**: I settled on `large-v3-turbo` after testing all three faster-whisper options. `distil-large-v3` felt instant but had rougher edges. `large-v3` heard best but added about a second on short push-to-talk bursts. `large-v3-turbo` gives distil-class speed with accuracy close to `large-v3`.
-- **Hotwords**: a short list of words whisper tends to mishear (project names, technical terms, your own name), mined from your own dictation history once you have some (`mine_vocab.py`). Keep it short — a list padded with too many words starts causing whisper to insert them where you didn't say them.
+- **Hotwords**: a short list of words whisper tends to mishear (project names, technical terms, your own name), mined from your own dictation history once you have some (`analysis_tools/mine_vocab.py`). Keep it short — a list padded with too many words starts causing whisper to insert them where you didn't say them.
 
 ## Personalizing corrections.txt
 

@@ -11,7 +11,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent.parent
 
 STOP = set("""
 a about above actually after again all almost also always am an and any are

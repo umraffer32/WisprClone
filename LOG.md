@@ -3,6 +3,37 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-29 — Moved the mine_*.py scripts into analysis_tools/
+
+Purely organizational, prompted by wanting the repo's file listing to stop
+reading as one long undifferentiated list - the 7 offline mining scripts
+now live in their own `analysis_tools/` directory, separate from the 4
+files that are actually the app (`wisprclone.py`, `audio.py`,
+`transcribe.py`, `ui.py`), which stay in root.
+
+Every one of the 7 locates the repo root's logs/config via
+`BASE = Path(__file__).parent`, which broke the instant they moved a level
+deeper - fixed to `.parent.parent` in all 7. A second breakage the initial
+scope missed: three scripts (`mine_ollama_parallel.py`,
+`mine_segment_polish.py`, `mine_merge_rule.py`) import `transcribe`
+directly, which only works when a directly-run script's own directory is on
+`sys.path` - true when they lived next to `transcribe.py`, false once moved.
+Fixed by adding the repo root to `sys.path` before those imports. Caught in
+review before merging, the same way the `emphasis_words.txt` gap was caught
+on the previous fix - Fable's own verification pass is real value here, but
+so is a second read before anything lands.
+
+Verified with real runs, not just import checks: all 7 scripts executed
+from `analysis_tools/` against the actual repo's logs (some against months
+of real data - `mine_merge_rule.py`'s full CUDA replay, `mine_polish_3b.py`'s
+full 252-case Ollama replay), both scripts with a CLI path override tested
+in both modes. One unrelated latent bug surfaced along the way and was left
+alone per the relocation-only scope: `mine_segment_polish.py` can hit a
+`UnicodeEncodeError` when piped output includes a transcript with CJK or
+Cyrillic characters and no console encoding is set - pre-existing, not
+caused by the move, worth its own fix another time
+(`PYTHONIOENCODING=utf-8` works around it meanwhile).
+
 ## 2026-08-29 — Runaway-repeat guard for Whisper hallucination loops ("the Xeon bug")
 
 Whisper occasionally hallucinates a word repeated dozens of times in a row,

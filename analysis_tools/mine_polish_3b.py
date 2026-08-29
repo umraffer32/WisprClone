@@ -27,7 +27,7 @@ import requests
 
 from mine_polish import check, load_pairs
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent.parent
 MODEL = "qwen2.5:3b-instruct"
 
 _s = requests.Session()
@@ -50,7 +50,7 @@ def main():
     paths = [q for q in (BASE / "wisprclone.log.1", BASE / "wisprclone.log")
              if q.exists()]
     if not paths:
-        raise SystemExit("no wisprclone.log found next to this script")
+        raise SystemExit("no wisprclone.log found in the repo root")
     pairs = load_pairs(paths)
     if not pairs:
         raise SystemExit("no polish pairs in the logs")

@@ -26,6 +26,7 @@ nondeterminism).
 import difflib
 import json
 import re
+import sys
 import time
 import tomllib
 import wave
@@ -33,9 +34,10 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).parent.parent))  # transcribe.py lives in the repo root
 from transcribe import Status, Transcriber
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent.parent
 SILENCE_MS = "500"  # front-runner per mine_streaming.py; must be a shadow candidate
 SR = 16000
 PAD_S = 0.2    # speech padding streaming would apply, so "alone" chunks aren't

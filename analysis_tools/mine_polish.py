@@ -22,7 +22,7 @@ from collections import Counter
 from pathlib import Path
 from statistics import median
 
-BASE = Path(__file__).parent
+BASE = Path(__file__).parent.parent
 
 # Audit bounds, deliberately tighter than the live min_ratio/max_ratio
 # (0.4/2.5) guard: that one catches catastrophic misbehavior at paste time,
@@ -144,7 +144,7 @@ def main():
     paths = [p for p in (BASE / "wisprclone.log.1", BASE / "wisprclone.log")
              if p.exists()]
     if not paths:
-        raise SystemExit("no wisprclone.log found next to this script")
+        raise SystemExit("no wisprclone.log found in the repo root")
     pairs = load_pairs(paths)
     jobs = load_jobs(paths)
     print(f"sources: {', '.join(p.name for p in paths)}")
