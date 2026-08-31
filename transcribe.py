@@ -962,18 +962,32 @@ class Transcriber(threading.Thread):
                 # matters, or a short dictation already sitting in the
                 # field would mask a paste that really missed. Terminals
                 # skip the read as above; a field readable as empty or not
-                # at all keeps the old heuristic.
+                # at all keeps the old heuristic. A miss logs the inputs
+                # that produced it (CalCareers' login page still flashes
+                # the pill on a good paste, 2026-08-31 - cause unknown).
                 if pastable:
                     verify = None if terminal else focused_text()
                     if verify:
                         after = " ".join(verify.split())
-                        landed = after.endswith(self.last_tail) or (
-                            field is not None
-                            and self.last_tail in after
-                            and self.last_tail not in " ".join(field.split()))
+                        at_end = after.endswith(self.last_tail)
+                        newly = (field is not None
+                                 and self.last_tail in after
+                                 and self.last_tail not in " ".join(field.split()))
+                        landed = at_end or newly
+                        if not landed:
+                            log.info("landed miss: field-read at_end=%s newly=%s "
+                                     "pre_read=%s tail=%r after_tail=%r",
+                                     at_end, newly, field is not None,
+                                     self.last_tail, after[-80:])
                     else:
-                        landed = (caret_visible() or focused_editable()
-                                  or is_terminal())
+                        caret, edit, term = (caret_visible(), focused_editable(),
+                                             is_terminal())
+                        landed = caret or edit or term
+                        if not landed:
+                            log.info("landed miss: fallback terminal=%s verify=%r "
+                                     "caret=%s editable=%s is_terminal=%s tail=%r",
+                                     terminal, verify, caret, edit, term,
+                                     self.last_tail)
                 else:
                     landed = False
                 if not landed:

@@ -22,8 +22,12 @@ the focused field and only show the pill when the pasted text failed to
 appear - at the field's end, or newly anywhere in it for a mid-document
 paste. Fields reading empty or exposing no UIA text keep the old
 heuristic, terminals and menu-blocked pastes are unchanged. Fix committed
-2026-08-31 (see LOG.md same date), verified by review only so far - the
-two reported apps need a live retest after a restart.
+2026-08-31 (see LOG.md same date). Live retest same day: VS Code and eBay
+both clean, but CalCareers' login page (calcareers.ca.gov, Username
+field) still flashes the pill on a paste that visibly landed - which part
+of the check misfires there isn't known yet. A `landed miss:` diagnostic
+line now logs the check's inputs whenever it fails, so the next dictation
+on that page should pin down the branch. Still open.
 
 WisprClone crashed to desktop with no Python traceback, right after a new
 NVIDIA display driver installed (screen blinked black, then came back). Diagnosed from the Windows

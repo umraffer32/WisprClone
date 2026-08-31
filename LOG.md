@@ -35,6 +35,12 @@ heuristic stayed quiet there, and the repaste click re-pastes from
 `last_text`, not the never-written clipboard, so the offer actually
 recovers that case.
 
+Live retest: VS Code and eBay both fixed, but CalCareers' login page
+still flashes the pill on a paste that lands (see BUGS.md same date). A
+follow-up commit adds a `landed miss:` log line capturing the check's
+inputs on every failure, so the next dictation there shows which branch
+misfires - diagnostics only, no behavior change.
+
 Prompted by today's NVIDIA driver crash finding having nowhere to live - no
 code changed, so it had no natural commit to hang a LOG.md entry off of. It's
 in BUGS.md instead, not here. BUGS.md
