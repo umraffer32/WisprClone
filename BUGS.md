@@ -7,7 +7,23 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
-## 2026-08-29 — NVIDIA driver update crashed the app and broke one Ollama request
+## 2026-08-31 — Repaste pill flashed on clean pastes into VS Code and eBay
+
+Dictating into VS Code's editor pane or eBay's message compose box showed
+the click-to-repaste pill even though the text pasted fine, implying a
+miss that never happened. The pill decision trusted two signals, a
+visible system caret or a UIA Edit control in focus, and both read False
+in those apps for the same reason: Monaco and eBay's composer draw their
+own caret and report as a UIA Document, not Edit, and Document is
+deliberately excluded because counting it would hide the pill on
+read-only web pages. Fix replaces the guess with ground truth, the same
+UIA field read the continuation stitch uses: after the Ctrl+V, re-read
+the focused field and only show the pill when the pasted text failed to
+appear - at the field's end, or newly anywhere in it for a mid-document
+paste. Fields reading empty or exposing no UIA text keep the old
+heuristic, terminals and menu-blocked pastes are unchanged. Fix committed
+2026-08-31 (see LOG.md same date), verified by review only so far - the
+two reported apps need a live retest after a restart.
 
 WisprClone crashed to desktop with no Python traceback, right after a new
 NVIDIA display driver installed (screen blinked black, then came back). Diagnosed from the Windows

@@ -869,10 +869,11 @@ class Transcriber(threading.Thread):
                 # A right-click mid-dictation leaves a context menu open
                 # over the target field. The menu eats the injected Ctrl+V,
                 # the clipboard restore wipes the text 300ms later, and the
-                # landed-check below stays quiet because the field behind
-                # the menu still owns its caret - the dictation vanished
-                # with no repaste offer (reported 2026-08-27). If a menu is
-                # up now, skip the keystroke and offer click-to-repaste.
+                # caret-based landed check used at the time stayed quiet
+                # because the field behind the menu still owned its caret -
+                # the dictation vanished with no repaste offer (reported
+                # 2026-08-27). If a menu is up now, skip the keystroke and
+                # offer click-to-repaste.
                 # The first fix polled up to 5s and auto-pasted the moment
                 # the menu closed; reverted same day. The real sequence is
                 # notice the stray right-click, stop talking, close the
@@ -947,9 +948,35 @@ class Transcriber(threading.Thread):
                     self.last_ended_sentence = text[-1] in ".!?"
                     self.last_paste_ts = time.monotonic()
 
-                # offer click-to-repaste only when the paste probably missed
-                if not pastable or not (caret_visible() or focused_editable()
-                                        or is_terminal()):
+                # Offer click-to-repaste only when the paste probably
+                # missed. Ground truth first, same as the continuation
+                # read: re-read the focused field (paste()'s restore sleep
+                # already gave the app time to consume the Ctrl+V) and
+                # look for the pasted text. Guessing from control type
+                # flashed the pill on clean pastes into VS Code's Monaco
+                # editor and web composers like eBay's - both draw their
+                # own caret and report as a UIA Document, not Edit
+                # (reported 2026-08-31). A mid-document paste won't sit at
+                # the field's end, so the tail appearing now when the
+                # pre-paste read lacked it also counts - "lacked it"
+                # matters, or a short dictation already sitting in the
+                # field would mask a paste that really missed. Terminals
+                # skip the read as above; a field readable as empty or not
+                # at all keeps the old heuristic.
+                if pastable:
+                    verify = None if terminal else focused_text()
+                    if verify:
+                        after = " ".join(verify.split())
+                        landed = after.endswith(self.last_tail) or (
+                            field is not None
+                            and self.last_tail in after
+                            and self.last_tail not in " ".join(field.split()))
+                    else:
+                        landed = (caret_visible() or focused_editable()
+                                  or is_terminal())
+                else:
+                    landed = False
+                if not landed:
                     self.status.result_until = time.monotonic() + self.result_display_s
 
                 # Streaming shadow (Phase A): log the segment bounds streaming

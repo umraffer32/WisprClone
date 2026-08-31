@@ -3,7 +3,37 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
-## 2026-08-29 — Added BUGS.md, backfilled from this file's full history
+## 2026-08-31 — Repaste pill false positives fixed with a post-paste field read
+
+Dictating into VS Code's editor pane and into eBay's message compose box
+popped the repaste pill even though the paste had landed fine. Both
+signals the pill decision leaned on fail there for the same reason: those
+editors draw their own caret, so `caret_visible()` reads False, and they
+report to UI Automation as a Document control rather than Edit, so
+`focused_editable()` reads False too - deliberately, since counting
+Document would hide the pill on read-only web pages, exactly where it's
+needed.
+
+The fix reuses the pattern the continuation stitch established - ground
+truth over control-type guessing. After the Ctrl+V, `focused_text()`
+re-reads the focused field (paste()'s clipboard-restore sleep has already
+given the app time to consume the keystroke) and the paste counts as
+landed when the field now ends with the pasted text's normalized tail,
+or, for a mid-document paste where content sits below the caret (VS
+Code's normal case), when the tail is present now but wasn't in the
+pre-paste read the stitch logic already takes. Newly-present matters:
+merely "present" would let a short dictation that already existed
+somewhere in the field mask a paste that really missed, the exact
+false-negative the Document exclusion was protecting against. A field
+that reads empty or exposes no UIA text falls back to the old
+caret/Edit/terminal heuristic unchanged, terminals skip the read as
+always (their UIA text is the whole viewport, not the input line), and a
+menu-blocked paste still forces the pill immediately. One side effect
+worth having: a paste dropped because the clipboard was busy now shows
+the pill too, since the field genuinely lacks the text - the old
+heuristic stayed quiet there, and the repaste click re-pastes from
+`last_text`, not the never-written clipboard, so the offer actually
+recovers that case.
 
 Prompted by today's NVIDIA driver crash finding having nowhere to live - no
 code changed, so it had no natural commit to hang a LOG.md entry off of. It's
