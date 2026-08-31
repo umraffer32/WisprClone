@@ -3,6 +3,16 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-08-31 — Switched polish back to qwen2.5:7b-instruct
+
+Downsizing to 3b (2026-08-28) traded quality for latency, and in daily use
+the edits read rougher often enough that it wasn't worth the speed - the
+guards catch the worst misbehavior and fall back to raw, but a merely
+mediocre edit that passes the guards still ships. Reverted config.toml's
+`[polish] model` to 7b-instruct; 3b stays pulled in Ollama in case this
+flips again. Unloaded the 3b model from Ollama's memory (`ollama stop
+qwen2.5:3b-instruct`) since nothing points at it anymore.
+
 ## 2026-08-31 — Repaste pill false positives fixed with a post-paste field read
 
 Dictating into VS Code's editor pane and into eBay's message compose box

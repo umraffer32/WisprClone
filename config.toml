@@ -56,20 +56,12 @@ min_audio_s = 8         # skip polish under this many seconds of audio - pure
                         # instant (polish costs ~0.4-0.6s on a short clip).
                         # Started at 5 (tax noticeable on 5-8s clips), went
                         # to 10, settled at 8 - all same-day feel tuning.
-model = "qwen2.5:3b-instruct"  # served locally by Ollama at 127.0.0.1:11434 -
-                        # downsized from qwen2.5:7b-instruct 2026-08-28 for
-                        # speed: a 232-case replay (log rotation had eaten
-                        # the rest of the original 405) showed the 3b no-ops
-                        # on only 13% of dictations vs 7b's 31%, at roughly
-                        # half the latency (0.63s mean vs ~1.4s). 8% of its
-                        # edits tripped a quality flag (mostly a crude
-                        # sentence-count check, plus 4 dropped swears out of
-                        # 201 edits) - _polish's swear-count/dropped-question/
-                        # ratio/_lost_sentence guards catch all of those live
-                        # and fall back to raw, so the real cost is polish
-                        # occasionally not happening, not corrupted output.
-                        # qwen2.5:7b-instruct stays pulled in Ollama in case
-                        # this needs reverting.
+model = "qwen2.5:7b-instruct"  # served locally by Ollama at 127.0.0.1:11434 -
+                        # switched back from qwen2.5:3b-instruct 2026-08-31:
+                        # the 3b's edits were noticeably rougher in daily use
+                        # despite the guards catching the worst of it, and the
+                        # latency saved wasn't worth the quality loss. 3b stays
+                        # pulled in Ollama in case this needs reverting again.
 timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
                         # dictation polishes in ~16-18s measured, so 30 leaves
                         # headroom (re-derive if max_recording_s changes). An
