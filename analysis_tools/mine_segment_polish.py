@@ -171,6 +171,9 @@ def main():
     for i, rec in enumerate(usable, 1):
         print(f"\r{i}/{len(usable)}", end="", flush=True)
         audio = load_wav(rdir / rec["wav"])
+        # t.model, not t.pipe: this needs Whisper's own sentence-level segment
+        # timestamps for the pause split; the live batched pipeline only
+        # yields one segment per VAD chunk
         segs, _ = t.model.transcribe(audio, **t.decode_opts)
         segs = [s for s in segs if s.no_speech_prob < 0.6]
         if not segs:

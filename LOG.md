@@ -3,6 +3,63 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-01 — Whisper runs through the batched pipeline; the 30s tail window was the hallucination bug
+
+A full-repo review (Fable 5.1, first session on the new model) found the real
+cause behind the "Xeon" x73 hallucination, and a class of latency spikes with
+it. `WhisperModel.transcribe` cuts audio into fixed 30-second windows. The
+Xeon dictation was 30.6s of audio, which left a final 0.6s window holding no
+speech but still carrying the hotword prompt. Whisper fills a window like that
+with invented text, and because the result fails the compression-ratio check
+it then retries at five higher temperatures, which is where that job's 5.22s
+whisper time came from. Reproduced offline on the retained WAV: three
+sequential runs at 5.5-6.2s each, a different invented tail every time
+("Merci d'avoir regardé cette vidéo !" on one). Today's 34.6s dictation
+reproduced the same thing offline (4.7-5.8s, tail "Sq4") even though its live
+run happened to come out clean at 1.05s. About 4% of dictations run past 30s,
+and every one of them was a coin flip on this.
+
+Fix: `Transcriber` now runs jobs through faster-whisper's
+`BatchedInferencePipeline` wrapped around the same loaded model (`self.pipe`;
+the CPU fallback gets its own, `self.cpu_pipe`). It cuts windows at Silero
+VAD silences instead of every 30s and decodes them together, at a single
+temperature and without timestamps. Same model, same decode options, same
+`no_speech_prob` filter. `self.model` stays as the bare WhisperModel for the
+GPU warm-ups and the mining scripts. 29 lines in transcribe.py.
+
+Verified offline against retained_audio, new path vs old on the same clips,
+GPU warmed before each run:
+
+- Xeon clip: 0.41-0.62s with a clean tail, vs 5.45-6.16s with garbage.
+  Today's 34.6s clip: 0.47-0.72s vs 4.72-5.80s.
+- All 32 retained clips of 25s or more: 17.9s total vs 38.3s.
+- The 40 most recent clips under 25s: mean 0.244s vs 0.281s; 2 clips changed
+  a word ("git ignore" -> "git-ignore", ".venv" -> ".v env").
+- Silence and a 0.4s clip yield zero segments as before, the shortest real
+  clip transcribes, the CPU fallback path loads and transcribes, and
+  `initial_prompt` through the pipe works for mine_merge_rule.py.
+
+Verified live after a tray Restart: a 68.5s toggle dictation transcribed in
+1.33s with a clean tail (the old path took 1.8-2.6s on a 75s clip and
+would have windowed this one as 30 + 30 + 8.5s).
+
+The trade is no temperature fallback. On this corpus fallback only ever fired
+on the garbage the tail window created, and `_RUNAWAY_REPEAT` still backstops
+a real loop. The 2026-08-27 decode A/B (beam 1 plus no timestamps) had shown
+wording regressions; the batched path keeps beam 5, and the short-clip diff
+above says no-timestamps alone was not the problem.
+
+mine_merge_rule.py now transcribes through `t.pipe` so its parity metric
+tracks the live path. mine_segment_polish.py stays on `t.model` on purpose:
+it splits at Whisper's sentence-level segment timestamps, which the batched
+path does not produce (one segment per VAD chunk). Also out of the review,
+not acted on yet: pruning hotwords that were never dictated (qwen, SC2, x64,
+DDR3, Xeon), five clean_text fixes with log evidence ("you know what I mean"
+losing its "you know", capitalizing after "a.m." and "...", ".venv" glued to
+"the", "had had" collapsed, apostrophe words never collapsing), a "no change"
+sentinel for the 33% of polishes that return the text unchanged, and a
+Parakeet TDT 0.6B v2 bake-off as a possible Whisper replacement.
+
 ## 2026-08-31 — Switched polish back to qwen2.5:7b-instruct
 
 Downsizing to 3b (2026-08-28) traded quality for latency, and in daily use

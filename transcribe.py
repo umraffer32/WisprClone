@@ -43,7 +43,7 @@ import numpy as np
 import pywintypes
 import requests
 import win32clipboard
-from faster_whisper import WhisperModel
+from faster_whisper import BatchedInferencePipeline, WhisperModel
 from faster_whisper.vad import VadOptions, get_speech_timestamps
 from pynput.keyboard import Controller, Key
 
@@ -583,8 +583,9 @@ class Transcriber(threading.Thread):
         self.corrections = base_dir / cfg["files"]["corrections"]
         self.emphasis_words = base_dir / cfg["files"]["emphasis_words"]
         self.history = base_dir / cfg["files"]["history"]
-        self.model = None
-        self.cpu_model = None
+        self.model = None  # WhisperModel: GPU warm-ups and the mining scripts call it directly
+        self.pipe = None   # BatchedInferencePipeline over it: every dictation goes through this
+        self.cpu_pipe = None
         self.gpu_fails = 0
         self.result_display_s = cfg["paste"]["result_display_s"]
         self.continuation_gap_s = cfg["paste"]["continuation_gap_s"]
@@ -649,13 +650,25 @@ class Transcriber(threading.Thread):
                     raise
         if self.model is None:
             self.model = self._load("cpu")
-            self.cpu_model = self.model
             self.status.device = "cpu"
+        # Jobs run through faster-whisper's batched pipeline, not
+        # WhisperModel.transcribe: the sequential path cuts audio into fixed
+        # 30s windows, so a 30.6s clip leaves a 0.6s tail window that holds
+        # no speech but still gets the hotword prompt - Whisper fills it with
+        # invented words (the "Xeon" x73 case, 2026-08-28) and then burns ~5s
+        # retrying at higher temperatures. The pipeline cuts windows at VAD
+        # silences instead and decodes them together. Measured on retained
+        # audio 2026-09-01: clean tails on both clips that reproduced the
+        # failure, long clips ~2x faster, short clips unchanged. It decodes
+        # at one temperature (no fallback cascade) and without timestamps.
+        self.pipe = BatchedInferencePipeline(self.model)
+        if self.status.device == "cpu":
+            self.cpu_pipe = self.pipe
 
     def _transcribe(self, audio):
         try:
             if self.status.device == "cuda":
-                segs, _ = self.model.transcribe(audio, **self.decode_opts)
+                segs, _ = self.pipe.transcribe(audio, **self.decode_opts)
                 result = list(segs)
                 self.gpu_fails = 0
                 return result
@@ -665,9 +678,9 @@ class Transcriber(threading.Thread):
             if self.gpu_fails >= self.cfg["gpu_fail_latch"]:
                 log.error("latching to CPU after %d GPU failures", self.gpu_fails)
                 self.status.device = "cpu"
-        if self.cpu_model is None:
-            self.cpu_model = self._load("cpu")
-        segs, _ = self.cpu_model.transcribe(audio, **self.decode_opts)
+        if self.cpu_pipe is None:
+            self.cpu_pipe = BatchedInferencePipeline(self._load("cpu"))
+        segs, _ = self.cpu_pipe.transcribe(audio, **self.decode_opts)
         return list(segs)
 
     def _warm_gpu(self):

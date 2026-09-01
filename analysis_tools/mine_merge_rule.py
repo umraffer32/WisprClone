@@ -198,7 +198,7 @@ def main():
 
     t = Transcriber(cfg, BASE, None, Status())
     t._load_models()
-    model, opts = t.model, t.decode_opts
+    model, opts = t.pipe, t.decode_opts  # the live path, so parity means parity
     print(f"model={cfg['model']['name']} device={t.status.device} "
           f"setting={SILENCE_MS}ms pad={PAD_S}s short<{SHORT_S}s gap-cap={GAP_CAP_S}s")
 

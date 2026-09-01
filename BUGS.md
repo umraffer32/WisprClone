@@ -7,6 +7,27 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-01 — Clips just over 30s hallucinated a tail and stalled ~5s (root cause of the Xeon x73 case)
+
+A dictation slightly longer than 30s could paste invented text at the end
+(the 2026-08-28 "Xeon" x73 run, since backstopped by `_RUNAWAY_REPEAT`) with
+its whisper time jumping from the usual ~0.6s to 5s. Root cause:
+`WhisperModel.transcribe` cuts audio into fixed 30-second windows, so a 30.6s
+clip ends with a 0.6s window holding no speech but still carrying the hotword
+prompt. Whisper fills it with invented words, and because that output fails
+the compression-ratio check it retries at five higher temperatures before
+giving up, which is the 5s. Reproduced offline on the retained WAV (three
+runs, 5.5-6.2s, a different invented tail each time, one of them "Merci
+d'avoir regardé cette vidéo !") and on the 34.6s dictation of 2026-09-01
+12:23 (4.7-5.8s, tail "Sq4"), whose live run happened to come out clean.
+About 4% of dictations run past 30s. Fix: jobs now run through
+faster-whisper's `BatchedInferencePipeline`, which cuts windows at VAD
+silences instead. Both clips transcribe clean in 0.4-0.7s, and all 32
+retained clips over 25s run in 17.9s total versus 38.3s. Fixed on the
+`batched` branch (LOG.md, same date) and verified live the same day: a
+68.5s toggle dictation transcribed in 1.33s with a clean tail. The
+2026-08-29 regex guard stays as the backstop.
+
 ## 2026-08-31 — Repaste pill flashed on clean pastes into VS Code and eBay
 
 Dictating into VS Code's editor pane or eBay's message compose box showed
@@ -96,7 +117,9 @@ a real gap in the first draft before merge. It ran before
 emphasis_words.txt loaded, so a protected word like "no" at 4+ repeats
 would have been silently mangled despite the explicit opt-out. Fixed in
 5c69461, verified against the real 73x case, the real 3x and 2x survivors,
-the 4x boundary, and protected-word exemption.
+the 4x boundary, and protected-word exemption. Update 2026-09-01: the root
+cause turned out to be Whisper's fixed 30s windowing leaving a near-empty
+tail window; see that date's entry. The regex stays as a backstop.
 
 ## 2026-08-28 — Desktop shortcut icon went blank
 
