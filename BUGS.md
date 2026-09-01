@@ -7,6 +7,32 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-01 — Five clean_text regexes corrupted real dictations
+
+Found by reading all 73 raw/out diffs the regex layer had logged since
+2026-08-27 (that day's logging is what made this auditable at all). Each
+corruption reached the pasted text, and since 65% of dictations run under
+the polish gate, nothing downstream could repair it. (1) "we're good, you
+know what I mean?" pasted as "good what I mean?" and "Okay, you know what?
+Let's undo that one" as "Okay what?": `_YOU_KNOW` stripped any
+comma-preceded "you know" regardless of what followed. (2) "1050 a.m. this
+morning" pasted as "a.m. This morning" and "probably... doesn't" as
+"probably... Doesn't": the sentence-start capitalizer treated an
+abbreviation's period and an ellipsis as sentence ends. (3) "the .venv
+file" pasted as "the.venv file": the space-before-punctuation glue fired
+on a dot-prefixed name. (4) "I had had Claude write" pasted as "I had
+Claude write": `_STUTTER` collapsed a legitimate past perfect, the same
+class as the "that that" bug of 2026-08-27. (5) "let's, you know, let's
+work" pasted as "let's let's work": `_STUTTER` matched `\w+`, which stops
+at an apostrophe, so no contraction ever collapsed. Fixes: a question-word
+guard on `_YOU_KNOW`, a shared `_SENT_END` anchor that excludes ellipses
+and common abbreviations, a token-end lookahead on the glue, "had" added
+to emphasis_words.txt, and `[\w']+` in `_STUTTER` and `_RUNAWAY_REPEAT`.
+Verified old-vs-new over 389 logged raw transcripts and 2,046 history
+lines: 15 lines change, all of them one of these five. Fixed on the
+`batched` branch (LOG.md, same date) and checked live the same afternoon:
+the three reproducible lines pasted intact and "let's let's" collapsed.
+
 ## 2026-09-01 — Clips just over 30s hallucinated a tail and stalled ~5s (root cause of the Xeon x73 case)
 
 A dictation slightly longer than 30s could paste invented text at the end

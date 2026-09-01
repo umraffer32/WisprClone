@@ -28,10 +28,16 @@ blocksize = 512
 
 [model]
 name = "large-v3-turbo"  # alternatives: "distil-large-v3" (fastest), "large-v3" (best ears)
-hotwords = "WisprClone, Wispr Flow, Claude, ClaudeMD, Fable, Ollama, qwen, Xeon, DDR3, SOQ, SC2, x64"
+hotwords = "WisprClone, Wispr Flow, Claude, ClaudeMD, Fable, Ollama, SOQ"
                           # personal vocabulary bias, mined from history.log
                           # (mine_vocab.py); keep short - over-biasing causes
-                          # insertions
+                          # insertions. Pruned 2026-09-01 to words actually
+                          # dictated since launch: qwen, SC2 and x64 had zero
+                          # uses, DDR3 four, Xeon four (one of them the x73
+                          # hallucination - the hotword prompt is what Whisper
+                          # echoes into an empty window). corrections.txt
+                          # still maps Xion=Xeon, so that mishearing stays
+                          # covered without the bias.
 device = "auto"           # "auto" (CUDA then CPU), "cuda", "cpu"
 compute_type = "float16"  # "int8_float16" halves VRAM
 gpu_fail_latch = 3

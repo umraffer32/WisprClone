@@ -3,6 +3,63 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-01 — Hotwords pruned to words actually dictated; five clean_text corruptions fixed
+
+Second batch out of the same review, also on the `batched` branch.
+
+**Hotwords.** The config carried 12 words. Counting them in history.log
+over the app's twelve days: qwen, SC2 and x64 were never dictated, DDR3
+four times, Xeon in four lines, and one of those lines is the x73
+hallucination itself. A hotword is the prompt Whisper sees on every
+window, and an empty window echoes the prompt (see the batched-pipeline
+entry below), so a word that never gets said is insertion risk with
+nothing on the other side of the ledger. Trimmed to WisprClone, Wispr
+Flow, Claude, ClaudeMD, Fable, Ollama, SOQ. SOQ stays despite two uses:
+61 in the Wispr Flow corpus, job-application vocabulary that resumes in
+October. corrections.txt still maps Xion=Xeon, so the common mishearing is
+covered without the bias.
+
+**clean_text.** The 73 raw/out diffs the regex layer has logged since
+2026-08-27 held five real corruptions, each fixed in place - one quirk per
+pattern, no new pattern added beyond a shared boundary anchor:
+
+- `_YOU_KNOW` stripped the phrase out of "we're good, you know what I
+  mean?" (pasted as "good what I mean?"). A comma before "you know" no
+  longer suffices when a question word follows; that form now needs a
+  comma after it too. history.log held a second victim: "Okay, you know
+  what? Let's undo that one" had pasted as "Okay what?".
+- `_SENTENCE_START` and `_LEADING_AND` treated the period of "a.m." and
+  the last dot of an ellipsis as a sentence end ("1050 a.m. This morning",
+  "probably... Doesn't", "took... Not even a minute"). Both now share
+  `_SENT_END`, which excludes an ellipsis and a.m./p.m./e.g./i.e./etc./vs.
+- The space-before-punctuation glue ate dot-prefixed names: "the .venv
+  file" pasted as "the.venv file". It now fires only when the punctuation
+  ends a token.
+- `_STUTTER` collapsed "had had" (past perfect). "had" joins "that" in
+  emphasis_words.txt and in the .example, whose header now says grammar
+  doubles belong there too.
+- `_STUTTER` and `_RUNAWAY_REPEAT` used `\w+`, so a contraction never
+  collapsed: "let's, you know, let's work" had pasted as "let's let's
+  work". Both now use `[\w']+`.
+
+Verified by running the old clean_text (git HEAD) and the new one side by
+side. 23 hand cases with expected output all pass, including the
+protections that must not move ("very, very important", "No, no, no",
+"that that's", "Do you know what", "Uh-huh", and the x73 Xeon run still
+collapsing). Over the 389 raw transcripts in wisprclone.log the two
+disagree on 10 lines, over the 2,046 lines in history.log on 5, and every
+one is one of the five fixes landing (plus "I'm I'm looking" now
+collapsing, the contraction fix at work). One consequence worth knowing:
+"etc. And then I want" keeps Whisper's capital A now, since "etc." no
+longer counts as a sentence end and the leading-"and" drop no longer fires
+there. Preserving Whisper's own text is the safer side of that.
+
+Live after a tray Restart: the "you know what I mean", "had had" and
+".venv" lines pasted intact with no regex change logged, and a spoken
+"let's let's" collapsed to one in the log. The a.m. and ellipsis guards
+couldn't be triggered on demand (Whisper wrote "10am" and no ellipsis),
+so they rest on the offline replay of the real log lines.
+
 ## 2026-09-01 — Whisper runs through the batched pipeline; the 30s tail window was the hallucination bug
 
 A full-repo review (Fable 5.1, first session on the new model) found the real

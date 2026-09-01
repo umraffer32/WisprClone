@@ -184,8 +184,15 @@ _FILLER = re.compile(r",?\s*(?<![\w-])(?:um+|uh+|erm|hmm+)(?![\w-]),?\s*", re.IG
 # only stripped when a comma marks it as the spoken pause ("the store, you
 # know, and milk" -> "the store and milk"). Bare "you know" with no comma on
 # either side is left alone - misses some filler uses, but a false strip
-# ("do you know" -> "do") is worse than a miss.
-_YOU_KNOW = re.compile(r",\s*you know\s*,?|(?<![\w-])you know\s*,", re.IGNORECASE)
+# ("do you know" -> "do") is worse than a miss. A comma before it isn't
+# enough on its own when a question word follows: "we're good, you know what
+# I mean?" is the fixed phrase, not the filler (pasted as "good what I mean?"
+# on 2026-09-01), so that form only strips with a comma after it too.
+_YOU_KNOW = re.compile(
+    r",\s*you know\s*,\s*"
+    r"|,\s*you know\b(?!\s+(?:what|how|that|if|where|when|why|who|the|this|it|i)\b)\s*"
+    r"|(?<![\w-])you know\s*,",
+    re.IGNORECASE)
 # Collapses an immediate stutter ("I I think", "the the box" -> "I think",
 # "the box"). Keeps the first occurrence's own casing via the backreference.
 # No comma allowed between repeats on purpose: a comma is Whisper's own
@@ -193,7 +200,9 @@ _YOU_KNOW = re.compile(r",\s*you know\s*,?|(?<![\w-])you know\s*,", re.IGNORECAS
 # important") differs from a real stutter (words run together, no pause).
 # Residual trade-off: fast, no-pause emphasis ("very very important") still
 # collapses, since there's no punctuation to tell it apart from a stutter.
-_STUTTER = re.compile(r"\b(\w+)(?:\s+\1\b)+", re.IGNORECASE)
+# [\w'] rather than \w so contractions count: "let's let's work" sailed
+# through the old pattern (2026-09-01 log). Same class in _RUNAWAY_REPEAT.
+_STUTTER = re.compile(r"\b([\w']+)(?:\s+\1\b)+", re.IGNORECASE)
 # Whisper occasionally hallucinates one word repeated dozens of times with a
 # comma after each ("Xeon, Xeon, Xeon, ..." x73, 2026-08-28) - the commas make
 # it read as emphasis to _STUTTER, so it sailed through untouched. This
@@ -203,7 +212,7 @@ _STUTTER = re.compile(r"\b(\w+)(?:\s+\1\b)+", re.IGNORECASE)
 # 2026-08-25) is a confirmed legitimate case that must not be touched: the
 # whole log corpus tops out at 3x for real speech, and the only hallucination
 # seen was 73x, with nothing in between - so 4 is the threshold.
-_RUNAWAY_REPEAT = re.compile(r"\b(\w+)\b(?:[\s,]+\1\b){3,}", re.IGNORECASE)
+_RUNAWAY_REPEAT = re.compile(r"\b([\w']+)\b(?:[\s,]+\1\b){3,}", re.IGNORECASE)
 
 
 def _collapse_runaway(m, protected):
@@ -221,8 +230,13 @@ def _collapse_runaway(m, protected):
 # keeping whatever anchored the match (start of text, or ". ") so the next
 # word still gets capitalized below. "and" mid-sentence is left alone - it's
 # only the sentence-opening filler use that reads wrong in dictated text.
-_LEADING_AND = re.compile(r"(^|[.!?]\s+)and\b,?\s*", re.IGNORECASE)
-_SENTENCE_START = re.compile(r"(^|[.!?]\s+)([a-z])")
+# Sentence boundary shared by the two patterns below: end punctuation plus
+# whitespace, except the "." of an ellipsis (Whisper's trailing-off marker:
+# "probably... doesn't" is mid-sentence) or of a common abbreviation ("1050
+# a.m. this morning" pasted as "a.m. This morning", 2026-09-01).
+_SENT_END = r"(?<!\.\.)(?<![apAP]\.[mM])(?<!\be\.g)(?<!\bi\.e)(?<!\betc)(?<!\bvs)[.!?]\s+"
+_LEADING_AND = re.compile(rf"(^|{_SENT_END})and\b,?\s*", re.IGNORECASE)
+_SENTENCE_START = re.compile(rf"(^|{_SENT_END})([a-z])")
 _HISTORY_LINE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}\] (.*)$")
 
 
@@ -402,7 +416,9 @@ def clean_text(text, corrections_path, emphasis_path):
         lambda m: m.group(0) if m.group(1).lower() in protected else m.group(1),
         text)
     text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"\s+([.,!?;])", r"\1", text)
+    # only punctuation that ends a token: "the .venv file" must not become
+    # "the.venv file" (2026-09-01)
+    text = re.sub(r"\s+([.,!?;])(?=\s|$)", r"\1", text)
     text = _LEADING_AND.sub(lambda m: m.group(1), text)
     text = _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
     # corrections.txt is re-read each job so edits apply without a restart

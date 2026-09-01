@@ -1,9 +1,13 @@
 # One word per line. A word here is never collapsed by the stutter-cleanup
 # regex, comma or not - use it for words you personally double on purpose
-# for emphasis ("this is very, very good").
+# for emphasis ("this is very, very good"), and for words English doubles
+# legitimately, which the regex can't tell from a stutter: "now that that's
+# done", "the script I had had written".
 #
 # Copy this file to emphasis_words.txt and fill it in with your own words.
 # emphasis_words.txt is gitignored on purpose, same as corrections.txt.
 very
 really
 no
+that
+had
