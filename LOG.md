@@ -3,6 +3,40 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-01 — Parakeet bake-off: stays on Whisper
+
+Last open item from the review. NVIDIA Parakeet TDT 0.6B v2 (English-only,
+better Open ASR Leaderboard word error rate than large-v3) ran over all 886
+retained dictations through onnx-asr 0.12.0 on CUDA, in a scratch venv, and
+Whisper ran the live path (`Transcriber.pipe` with the app's decode options)
+over the same files. Parakeet was faster on 885 of 886 clips: median 0.11s
+against 0.23s, whole pass 110s against 232s. Word disagreement between the
+two was 3.8% of the corpus, 68% of clips identical after lowercasing, and
+almost all of the gap was style rather than hearing.
+
+Decision: don't switch. The tenth of a second saved is under the bar the
+streaming decision set (0.14s median, shelved 2026-08-27) and disappears
+next to a multi-second polish. The style differences all run against the
+app: Parakeet keeps every uh, um and stutter (28 clips with fillers against
+Whisper's 8; phrase repeats like "I don't I don't" get past the single-word
+`_STUTTER`), spells numbers as words on 48 clips ("three hundred and
+seventeen pounds", "Nvidia Fifty Ninety"; 26 of those under the 8s polish
+gate, so they'd paste as-is, and Whisper's digits were right every time),
+and has no hotword biasing (WisprClone came out "Whisperclone" in all 15
+clips, Claude "Clod" in 7 of 23). Profanity counts were identical, neither
+model sanitizes. The two hallucination clips were clean on both, so the
+batched pipeline had already closed Whisper's own gap. Real mishearings
+were rare in both directions. There is also a packaging blocker:
+onnxruntime-gpu can't share a venv with the CPU onnxruntime faster-whisper
+pulls in for Silero VAD, so Parakeet would have to be a full replacement,
+not a fallback. PyPI's onnxruntime-gpu 1.29.0 is a CUDA 13 build and
+silently fell back to CPU here; the CUDA 12 build from ORT's own index
+worked.
+
+Revisit only if a number-formatting step lands in the ONNX path or Whisper
+hallucinations return on the batched pipeline. No code changed; the
+`parakeet` branch was created for the test and deleted empty.
+
 ## 2026-09-01 — Hotwords pruned to words actually dictated; five clean_text corruptions fixed
 
 Second batch out of the same review, also on the `batched` branch.
@@ -115,7 +149,8 @@ DDR3, Xeon), five clean_text fixes with log evidence ("you know what I mean"
 losing its "you know", capitalizing after "a.m." and "...", ".venv" glued to
 "the", "had had" collapsed, apostrophe words never collapsing), a "no change"
 sentinel for the 33% of polishes that return the text unchanged, and a
-Parakeet TDT 0.6B v2 bake-off as a possible Whisper replacement.
+Parakeet TDT 0.6B v2 bake-off as a possible Whisper replacement (run the
+same day, see the entry above).
 
 ## 2026-08-31 — Switched polish back to qwen2.5:7b-instruct
 
