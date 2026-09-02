@@ -115,14 +115,19 @@ a failed polish must never lose a dictation). Always address it as
 - Config knobs belong in config.toml; internal sanity thresholds stay in code.
 - clean_text() regexes are one-quirk-per-pattern; check the polish pass before
   adding another.
-- Writing or modifying code in this repo goes to a Fable agent, dispatched
-  in an isolated git worktree (`isolation: "worktree"`), not written
-  directly in the main chat. Main chat (Sonnet) still scopes the work,
-  reviews the result, and handles git. Decided 2026-08-26 after Fable
-  outperformed on both the SleepWatcher diagnosis and a code-plan critique.
-  Always dispatch at max effort - there's no effort parameter on the Agent
-  tool itself, so this means explicitly telling the agent in its prompt to
-  work at maximum reasoning depth, not the default pass. Also pair every
+- Writing or modifying code in this repo goes to an agent dispatched in an
+  isolated git worktree (`isolation: "worktree"`), not written directly in
+  the main chat. Main chat still scopes the work, reviews the result, and
+  handles git. Which model gets the job is the main chat's call (decided
+  2026-09-02): Sonnet or Opus for anything small or well-specified, Fable
+  only for the genuinely hard changes - subtle concurrency, a design that
+  needs pressure-testing, a bug that resisted a first pass. From 2026-08-26
+  to 2026-09-02 every code change went to Fable regardless of size, after it
+  outperformed on the SleepWatcher diagnosis and a code-plan critique; that
+  burned usage on trivial edits. When Fable is the pick, dispatch at max
+  effort - there's no effort parameter on the Agent tool itself, so this
+  means explicitly telling the agent in its prompt to work at maximum
+  reasoning depth, not the default pass. Also pair every
   such dispatch with a ~60s Monitor heartbeat that digests real progress
   (files touched, commands run, the agent's last note-to-self - never raw
   transcript dumped verbatim) and relay each one as 2-3 plain sentences of
