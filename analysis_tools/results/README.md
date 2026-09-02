@@ -18,26 +18,28 @@ app path (`Transcriber.pipe` with the app's decode options and hotwords).
 Same turbo model, same 981 clips, same batched path; the only change is
 the prompt Whisper reads before decoding. The baseline is the hotword list
 as config.toml has it ("WisprClone, Wispr Flow, Claude, ...", no sentence,
-no period). Two variants fold the same hotwords into fully punctuated
-sentences: a three-sentence version with a clock time in it, and a
-one-sentence version. Whisper imitates the style of its prompt, so the bet
+no period). Three variants fold the same hotwords into fully punctuated
+sentences: the three-sentence example from the chat exactly as Uriah
+pasted it back (no ClaudeMD, no digits), a three-sentence version with
+ClaudeMD and a clock time in it, and a one-sentence version. Whisper imitates the style of its prompt, so the bet
 was that a punctuated prompt yields punctuated output. It does, and it
-does not cost accuracy, vocabulary, or latency. Call: adopt the short
-version (pending Uriah's go), as the fix for the polish-off trial's
+does not cost accuracy, vocabulary, or latency. Call: adopt a sentence prompt
+(which one is Uriah's pick; all three land within a few clips of each
+other, his own scored best on vocabulary), as the fix for the polish-off trial's
 dominant quirk, the missing final period.
 
-| | baseline (hotword list) | long clean prompt | short clean prompt |
-|---|---:|---:|---:|
-| clips ending without . ! or ? | 291 | 15 | 19 |
-| of those, 6+ words (real sentences) | 198 | 7 | 7 |
-| clips with um/uh | 9 | 4 | 6 |
-| clips with "you know" | 58 | 55 | 56 |
-| "WisprClone" spelled right | 9 | 14 | 13 |
-| Claude/Fable/Ollama hits | 58 | 58 | 58 |
-| empty outputs | 0 | 0 | 0 |
-| word disagreement vs baseline | | 1.1% | 0.7% |
-| clips word-identical to baseline | | 873 | 902 |
-| wall median | 0.235s | 0.236s | 0.233s |
+| | baseline (hotword list) | Uriah's 3 sentences | long clean prompt | short clean prompt |
+|---|---:|---:|---:|---:|
+| clips ending without . ! or ? | 291 | 17 | 15 | 19 |
+| of those, 6+ words (real sentences) | 198 | 7 | 7 | 7 |
+| clips with um/uh | 9 | 4 | 4 | 6 |
+| clips with "you know" | 58 | 53 | 55 | 56 |
+| "WisprClone" spelled right | 9 | 15 | 14 | 13 |
+| Claude/Fable/Ollama hits | 58 | 61 | 58 | 58 |
+| empty outputs | 0 | 0 | 0 | 0 |
+| word disagreement vs baseline | | 0.9% | 1.1% | 0.7% |
+| clips word-identical to baseline | | 880 | 873 | 902 |
+| wall median | 0.235s | 0.232s | 0.236s | 0.233s |
 
 What the word-level diffs were, both variants: "alright" to "all right"
 (Whisper's spelling under a formal prompt; the most common diff), "grock"
@@ -49,7 +51,8 @@ comma or two; the short one is the lighter touch and the closer match to
 the baseline. Hotword recall went up, not down, with the sentence framing.
 The "whisper(clone) misspellings" row in prompt_style_report.txt is a
 counting bug (negative values) and should be ignored. Scripts:
-prompt_style_test.py; outputs whisper_results_prompt_<variant>.json.
+prompt_style_test.py and prompt_style_test2.py; outputs
+whisper_results_prompt_<variant>.json.
 
 ## 2026-09-02 — Granite Speech 3.3 2B vs large-v3-turbo
 
