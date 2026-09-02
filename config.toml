@@ -10,6 +10,10 @@ debounce_ms = 300
 [audio]
 duck = true           # lower other apps' volume while recording
 duck_factor = 0.05    # they play at 5% while the mic is hot
+cue = true            # play a clip when recording starts and stops
+cue_volume = 1.0      # scales the clip; 1.0 is its own level as Wispr Flow
+                      # plays it, lower to soften. Clips are read from
+                      # sounds/ at the repo root - see SETUP.md
 idle_close_s = 10     # release the mic (and its tray icon) this many seconds
                       # after the last dictation. 0 = always hot. Briefly
                       # raised to 300 on 2026-08-27 over a clipping-risk

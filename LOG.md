@@ -3,6 +3,35 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Start/stop cue plays Wispr Flow's own clips
+
+Added a short audible cue on recording start and stop, matching what
+Wispr Flow plays on its dictation key. First cut synthesized a tone with
+numpy, but a real recording of Wispr Flow's own cue is a closer match to
+the sound I'm actually trying to replicate, so switched to playing its
+actual clips instead. Wispr Flow's bundle picks a sound set through
+`dh[folder || "default"]`, and with `selectedSoundFolder` unset that's the
+"default" set: the two top-level files in its install's
+`resources/assets/sounds/`, `dictation-start.wav` (0.180s) and
+`dictation-stop.wav` (0.219s), both 44100Hz stereo 16-bit PCM at a peak
+amplitude around 0.15. `Cue` now loads those two files from a new
+`sounds/` directory at the repo root (gitignored, not redistributable -
+see SETUP.md for where to copy them from) instead of generating anything,
+volume-scaling the int16 samples with numpy and keeping the source's own
+channel count and rate untouched. A missing file, or one that isn't
+16-bit PCM, logs a warning and disables the cue instead of raising.
+
+Playback still goes through `winsound.PlaySound` over opening a
+`sounddevice` stream per cue, which costs 50-300ms on this machine, and
+winsound is already stdlib. `SND_MEMORY | SND_ASYNC` was the first
+attempt, but Python's winsound raises `RuntimeError: Cannot play
+asynchronously from memory` for that combination, so each clip is
+volume-scaled once into a temp WAV file and played with `SND_FILENAME |
+SND_ASYNC` instead, still non-blocking. Hooked into `tick()`'s existing
+rising/falling edge check, the same one that drives the `Ducker`, so it
+never runs on a pynput hook thread and stays off the ducked volume path.
+New `[audio]` knobs `cue` and `cue_volume`.
+
 ## 2026-09-02 — Chunk joins no longer capitalize a continued sentence
 
 Built the fix the calibration entry below proposed. transcribe.py's

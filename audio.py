@@ -11,8 +11,11 @@ import collections
 import logging
 import os
 import queue
+import tempfile
 import threading
 import time
+import wave
+import winsound
 
 import numpy as np
 import sounddevice as sd
@@ -63,6 +66,59 @@ class Ducker(threading.Thread):
                     self._saved = []
             except Exception:
                 log.exception("audio ducking failed")
+
+
+class Cue:
+    """Plays Wispr Flow's own start/stop clips (sounds/dictation-start.wav,
+    sounds/dictation-stop.wav - see SETUP.md) through winsound, so there's
+    no per-cue device open (50-300ms on this machine) and no blocking on
+    the caller's thread. Not ducked: PlaySound goes straight to the default
+    output device, bypassing the Ducker.
+
+    winsound refuses SND_MEMORY combined with SND_ASYNC (RuntimeError:
+    "Cannot play asynchronously from memory"), so each clip is volume-scaled
+    once into a temp WAV file and played from there instead."""
+
+    def __init__(self, base_dir, volume):
+        self._start = self._load(base_dir / "sounds" / "dictation-start.wav", volume)
+        self._stop = self._load(base_dir / "sounds" / "dictation-stop.wav", volume)
+
+    @property
+    def ok(self):
+        return self._start is not None and self._stop is not None
+
+    def _load(self, src, volume):
+        if not src.exists():
+            log.warning("cue clip missing, disabling cue: %s", src)
+            return None
+        try:
+            with wave.open(str(src), "rb") as r:
+                if r.getsampwidth() != 2:
+                    log.warning("cue clip isn't 16-bit PCM, disabling cue: %s", src)
+                    return None
+                channels, rate = r.getnchannels(), r.getframerate()
+                frames = r.readframes(r.getnframes())
+        except Exception:
+            log.exception("cue clip failed to load, disabling cue: %s", src)
+            return None
+        samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32) * volume
+        scaled = samples.clip(-32768, 32767).astype(np.int16)
+        path = os.path.join(tempfile.gettempdir(), f"wisprclone_{src.name}")
+        with wave.open(path, "wb") as w:
+            w.setnchannels(channels)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(scaled.tobytes())
+        return path
+
+    def play(self, starting):
+        path = self._start if starting else self._stop
+        if path is None:
+            return
+        try:
+            winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+        except Exception:
+            log.exception("cue playback failed")
 
 
 class Recorder:
