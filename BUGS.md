@@ -7,6 +7,25 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-02 — Mid-sentence capital after a pause in long dictations
+
+Symptom: "It stopped feeling Like it was built for the gamers" pasted from
+a 43s dictation, and "noticing is... That the pill" from a scripted 31s
+one. Root cause: the batched pipeline cuts audio into chunks of up to 30s
+at VAD silences and decodes each on its own, so a chunk cut mid-sentence
+ends unpunctuated (often with Whisper's trailing "...") and the next chunk
+starts with a capital, as any fresh decode does. The 8s-chunk calibration
+replay found 66 such joins, all continuations in the whole-clip
+transcript; chunk gap timing carried no signal because of VAD padding.
+Not the regex layer: the 2026-09-01 capitalizer fix only stopped
+clean_text from adding these. Fix: `join_segments()` in transcribe.py
+lowercases the next chunk's first word at an unpunctuated join, with I,
+prompt and corrections names, mixed-case words and names seen mid-sentence
+in the same dictation exempt, and drops the cut ellipsis. Status: fixed,
+replay-tested before wiring in (LOG.md, results README); the mirror case,
+a period at a cut chunk end that isn't a sentence end, remains, since text
+alone can't tell it apart.
+
 ## 2026-09-01 — qwen2.5:7b polish paraphrased past the prompt and the guards
 
 Found by the four-model polish replay, not by any single complaint. Over

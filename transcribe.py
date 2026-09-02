@@ -393,6 +393,46 @@ class Status:
         return self._transcribing
 
 
+def _proper_nouns(prompt, corrections_path):
+    """Capitalized words from the Whisper prompt and corrections.txt targets:
+    the names join_segments must not lowercase."""
+    words = set(re.findall(r"[A-Z][A-Za-z']*", prompt or ""))
+    try:
+        for line in Path(corrections_path).read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                words.update(re.findall(r"[A-Z][A-Za-z']*", line.split("=", 1)[1]))
+    except OSError:
+        pass
+    return words
+
+
+def join_segments(segments, proper):
+    """Join the batched pipeline's chunks into one text. Each chunk is decoded
+    on its own, so a chunk cut mid-sentence ends without punctuation (often
+    with a trailing "...") and the next starts with a capital as if it were
+    a new sentence. In a 586-join replay every such join was a continuation
+    (2026-09-02), so drop the cut ellipsis and lowercase the next chunk's
+    first word, except I/I'm-style words, proper nouns, and anything with a
+    capital past the first letter (YouTube, GPU)."""
+    texts = [t.strip() for t in segments if t.strip()]
+    # a word Whisper capitalized mid-sentence anywhere in this dictation is a
+    # name too (Windows, Thursday), whether or not the prompt knows it
+    proper = proper | {w for t in texts
+                       for w in re.findall(r"(?<=[^.!?] )[A-Z][a-z']+", t)}
+    out = []
+    for text in texts:
+        if out:
+            prev = re.sub(r"(?:\.\.\.|…)$", "", out[-1]).rstrip()
+            if not re.search(r"[.!?]['\")]*$", prev):
+                out[-1] = prev
+                m = re.match(r"([A-Z][a-z']*)\b", text)
+                word = m.group(1).removesuffix("'s") if m else "I"
+                if word != "I" and not word.startswith("I'") and word not in proper:
+                    text = word[0].lower() + text[1:]
+        out.append(text)
+    return " ".join(out)
+
+
 def clean_text(text, corrections_path, emphasis_path):
     text = _FILLER.sub(" ", text)  # single space, collapsed below
     text = _YOU_KNOW.sub(" ", text)
@@ -872,8 +912,9 @@ class Transcriber(threading.Thread):
                 audio = trim_trailing_silence(audio)
                 audio = normalize(audio, self.normalize_peak)
                 segments = self._transcribe(audio)
-                whisper_text = " ".join(s.text.strip() for s in segments
-                                        if s.no_speech_prob < 0.6)
+                whisper_text = join_segments(
+                    (s.text for s in segments if s.no_speech_prob < 0.6),
+                    _proper_nouns(self.cfg.get("prompt"), self.corrections))
                 text = clean_text(whisper_text, self.corrections, self.emphasis_words)
                 if text != whisper_text:
                     # same two-line shape as the polish diff so the regex
@@ -1086,6 +1127,7 @@ if __name__ == "__main__":
     print(f"loaded+warmed on {t.status.device} in {time.monotonic() - start:.1f}s")
     start = time.monotonic()
     segments = t._transcribe(audio)
-    text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.6)
+    text = join_segments((s.text for s in segments if s.no_speech_prob < 0.6),
+                         _proper_nouns(t.cfg.get("prompt"), t.corrections))
     print(f"transcribed in {time.monotonic() - start:.2f}s: "
           f"{clean_text(text, t.corrections, t.emphasis_words)!r}")

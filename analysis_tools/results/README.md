@@ -13,6 +13,58 @@ Method common to all of these: no human-transcribed ground truth exists, so
 what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and hotwords).
 
+## 2026-09-02 — Chunk-join rule replay
+
+Question: does the join rule proposed in the calibration entry below fix
+the artifact joins without lowercasing real sentence starts or names? The
+rule as built (`join_segments()` in transcribe.py): at a join where the
+previous chunk didn't end with . ! ? (a trailing "..." is treated as a
+cut and dropped), lowercase the next chunk's first word unless it is I or
+I'm-style, a capitalized word from the Whisper prompt or a corrections.txt
+target, a word with a capital past its first letter, or a word capitalized
+mid-sentence elsewhere in the same dictation. Three checks, all against the
+code that ships: 17 unit cases; every join from the 8s-chunk calibration
+replay, with the whole-clip baseline transcript's case of the word after
+the join as truth (clean only for clips under 30s, since the baseline of
+longer clips carries production chunk joins of its own); and production
+chunking (chunk_length 30) over every retained clip of 25s or more.
+
+| calibration joins, clips under 30s (clean truth) | |
+|---|---:|
+| rule lowercased, baseline lowercase (fixed) | 156 |
+| rule lowercased, baseline capital | 8 |
+| of those, real regressions | 2 ("Spanish", "Thursday") |
+| chunk capital kept, baseline lowercase (period-at-cut case, out of scope) | 63 |
+| untouched and matching | 156 |
+| not located in the baseline | 98 |
+
+Of the 8 counted as regressions, 3 are the baseline showing the same
+quirk under the old unpunctuated prompt ("playing Then what I would do",
+"speeches How would that change"), 1 is a lookup drift, 1 ("Windows") is
+protected in real use because the test feeds only 40-character tails and
+the name appears mid-sentence earlier in the same chunk, and 2 are real: a
+language and a weekday the prompt doesn't know. Joins where the previous
+chunk ended in "...": baseline lowercase after 152, capital after 31, so
+treating the ellipsis as a cut is right about five times in six.
+
+| production chunking, clips of 25s or more | |
+|---|---:|
+| clips with 2+ chunks | 16 of 981 |
+| joins | 18 |
+| joins changed by the rule | 11 |
+| changed joins that read wrong | 0 |
+
+The 11 include "what kind of data... | Can be useful" to "data can be
+useful", "It's going to be... | The last time" to "be the last time",
+"read them, | And see" to "them, and see", and "a lot of... |
+Micromanaging." to "of micromanaging."; "going to... | Jump Ship" became
+"jump Ship", Whisper's own capital on Ship left alone. The two live clips
+that started this ("feeling | Like", "noticing is... | That") both come
+out as one sentence. Call: ship it. Exposure is about one join per 55
+dictations at current lengths, fixed in 11 of 18, and wrong in roughly 1
+of 80 words it lowercases. Data: `2026-09-02/join_rule_test.py`,
+`join_rule_test.txt`.
+
 ## 2026-09-02 — Mid-sentence capitals are chunk-join artifacts
 
 Question: where do capitals like "It stopped feeling Like it was built"

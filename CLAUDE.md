@@ -22,9 +22,11 @@ onboarding work unless explicitly asked.
   blocks while recording, enqueues `{"blocks", "mode"}` jobs on stop and a
   `{"warm": True}` GPU-warm sentinel on start. Also `Ducker` (lowers other
   apps' volume while the mic is hot).
-- `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, regex
-  `clean_text()`, LLM polish (duration-gated, mode-agnostic), clipboard
-  paste. Also the polish prompt and its output guards.
+- `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, chunk
+  join `join_segments()` (lowercases a capital the batched pipeline puts at
+  a mid-sentence chunk cut), regex `clean_text()`, LLM polish
+  (duration-gated, mode-agnostic), clipboard paste. Also the polish prompt
+  and its output guards.
 - `ui.py` — recording pill overlay (draggable; position persists in the
   gitignored `pill_pos.txt`) and tray icon/menu.
 - `config.toml` — all knobs. The app must be restarted to pick up changes.

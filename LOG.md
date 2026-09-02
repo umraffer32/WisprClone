@@ -3,6 +3,27 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Chunk joins no longer capitalize a continued sentence
+
+Built the fix the calibration entry below proposed. transcribe.py's
+segment join is now `join_segments()`: when the previous chunk of the
+batched pipeline didn't end with . ! ? (a trailing "..." counts as a cut
+and is dropped), the next chunk's first word is lowercased, unless it's I
+or I'm-style, a capitalized word from the Whisper prompt or a
+corrections.txt target, a word with a capital past its first letter
+(YouTube, GPU, CLAUDE.md), or a word Whisper capitalized mid-sentence
+anywhere else in the same dictation (Windows). Tested before wiring in:
+17 unit cases, a replay over the 586 joins from the 8s-chunk calibration
+with the whole-clip transcript's case as truth (clips under 30s, where
+that truth is clean: 156 fixed, 2 real regressions, "Spanish" and
+"Thursday" lowercased), and production chunking over the 16 retained
+clips that split into two or more chunks (18 joins, 11 changed, every
+change a continuation that now reads as one sentence). Joins only exist
+in dictations over about 30s, so the exposure is small either way. The
+mirror artifact, a period Whisper puts at a cut chunk's end mid-sentence,
+is left alone: nothing in the text distinguishes it from a real sentence
+end. Tables in analysis_tools/results/README.md.
+
 ## 2026-09-02 — Whisper prompt switched from a hotword list to three sentences
 
 Applied the prompt-style result (entry below). config.toml's `hotwords`
