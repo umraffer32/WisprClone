@@ -13,6 +13,48 @@ Method common to all of these: no human-transcribed ground truth exists, so
 what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and hotwords).
 
+## 2026-09-02 — Mid-sentence capitals are chunk-join artifacts
+
+Question: where do capitals like "It stopped feeling Like it was built"
+come from, and can a rule fix them without breaking real sentence starts?
+Two measurements. First, a replay of turbo over every clip of 6s or more
+with `chunk_length=8`, so the batched pipeline splits at natural pauses
+and produces 586 chunk joins; for each join, whether the next chunk starts
+with a capital, whether the previous chunk ended with sentence
+punctuation, and whether the full-clip baseline transcript (same model,
+whole context) had a sentence boundary at that spot. Second, four scripted
+toggle dictations with a marked 1s or 4s pause, mid-sentence or between
+sentences, plus the live 43s dictation that showed the quirk.
+
+| | |
+|---|---:|
+| joins in the 8s-chunk replay | 586 (539 located in the baseline text) |
+| next chunk starts with a capital | 496 of 586 |
+| previous chunk ends without . ! ? | 79 |
+| baseline has a sentence boundary at the join | 134 of 539 |
+| artifact case: previous chunk unpunctuated, next chunk capitalized | 66 |
+| of those, baseline says sentence boundary | 0 of 66 |
+
+So a capital at the start of a chunk whose predecessor didn't end a
+sentence was a continuation in every one of 66 cases. Whisper never
+chooses to capitalize there; the chunk restart does. The gap between chunk
+end and next chunk start is not a usable pause measure (513 of 539 joins
+show 0 to 0.3s, because the VAD pads both sides), so a pause-length
+threshold isn't needed and wouldn't work; the previous chunk's last
+character is the whole signal. Live confirmation: the 43s dictation split
+at 31.9s/34.2s exactly at "feeling | Like", and the first scripted clip
+(31s, 1s mid-sentence pause) split at "noticing is... | That the pill",
+Whisper ending the cut chunk with its trailing-off ellipsis. The other
+three scripted clips stayed under the 30s chunk limit, so they never
+split, and Whisper handled the same pauses correctly inside one window
+(the 4s mid-sentence pause came out as plain "is that"). History.log has
+8 "... Capital" cases in 2,186 pastes and 16 function-word capitals after
+an unpunctuated word, so the quirk is rare overall and confined to
+dictations over ~30s. Fix (proposed): at each chunk join, if the previous
+chunk ends without sentence punctuation or with "...", lowercase the next
+chunk's first word unless it's "I"/"I'm"-style or a proper noun from the
+prompt or corrections; drop the cut ellipsis. Script: join_calibration.py.
+
 ## 2026-09-02 — Whisper prompt style: clean sentences instead of a bare hotword list
 
 Same turbo model, same 981 clips, same batched path; the only change is
