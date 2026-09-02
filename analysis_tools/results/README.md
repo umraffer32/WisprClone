@@ -1,0 +1,179 @@
+# Analysis results
+
+Running record of every offline test run against the retained dictation
+audio and the logs: what was compared, the numbers, and the call. Newest
+first, same shape as LOG.md. LOG.md keeps the decision and why; this file
+keeps the tables. The data behind each entry sits in a dated folder next to
+this file (`2026-09-01/` and so on) and is gitignored, since it holds full
+dictation transcripts. The scripts that produced a set sit in the same
+folder, also untracked. Only this README is committed.
+
+Method common to all of these: no human-transcribed ground truth exists, so
+"accuracy" is measured as disagreement between candidates plus a read of
+what the disagreements are. Whisper baselines always run through the live
+app path (`Transcriber.pipe` with the app's decode options and hotwords).
+
+## 2026-09-01 — large-v3 vs large-v3-turbo on the batched path
+
+886 retained clips, both models through `Transcriber.pipe`. Call: stay on
+turbo. The disagreements are mostly style, v3 is slower on every clip, it
+ignores the WisprClone hotword, and its no-speech scores would make the
+app's segment filter drop 2% of dictations outright.
+
+| | turbo | large-v3 |
+|---|---:|---:|
+| word disagreement (of 17,653 turbo words) | | 4.9% |
+| clips identical after normalizing | | 720 (81%) |
+| wall median | 0.23s | 0.49s |
+| wall p95 | 0.43s | 1.47s |
+| clips under 10s, median | 0.22s | 0.41s |
+| 10 to 30s, median | 0.34s | 0.98s |
+| over 30s, median | 0.64s | 1.90s |
+| whole pass | 232s | 549s |
+| slower on | | 886 of 886 clips |
+| clips returned empty | 0 | 18 |
+| wrote "WisprClone" for the hotword | 9 of 9 | 0 of 9 |
+
+Disagreement by clip length: 3.7% under 10s, 5.5% at 10 to 30s, 7.2% over
+30s. What the disagreements were: v3 formalizes ("gonna" to "going to",
+"wanna" to "want to"), fuses compounds ("gitignore", "venv", "onto",
+"servicenow"), and keeps fillers turbo drops ("you know", "uh", "I mean").
+Real hearing differences were rare and went both ways ("grock" to "grok" in
+v3's favor, "fuck Jordan" to "photjourn" against it). The 18 empty clips
+were transcribed correctly by v3 but scored no_speech_prob 0.60 to 0.86 on
+plain speech; the app drops segments over 0.6, and turbo never crosses that
+line on real speech. Any future Whisper model swap has to re-check that
+threshold first.
+
+## 2026-09-01 — Polish "no change" sentinel
+
+qwen3.5:9b over the same 548 polish inputs as the bake-off below, three
+prompt variants, compared against its own outputs under the current
+prompt. Call: dropped. The model retypes unchanged text by habit, and every
+wording that made it stop also made it skip real edits.
+
+| variant | what happened |
+|---|---|
+| current prompt + "if no changes, output exactly NOCHANGE" | 388 of 548 outputs identical to input; sentinel used on 4. When used: 0.30s vs 0.87s. Missed edits: 0. |
+| sentinel instruction first, with an example (40 no-op + 20 edited inputs) | fired on 16 of 40 no-ops, and wrongly on 7 of 20 edited inputs |
+| separate YES/NO "does this need cleanup" question, 0.22s, before the polish | NO on 30 of 40 no-ops, and on 8 of 20 edited inputs; the skipped edits were mostly the missing final period |
+
+Net for the classifier variant: about half of polishes would save ~0.65s,
+a third would pay 0.22s more, and one in eight would lose its punctuation
+fix.
+
+## 2026-09-01 — Polish model bake-off
+
+548 real polish inputs (317 raw lines from wisprclone.log's polish diffs,
+231 clips of 8s or more from the Whisper pass through `clean_text()`,
+duplicates removed) through the exact `_polish()` request (temperature 0,
+num_ctx 8192, num_predict from max_ratio, keep_alive 24h, `think: false`
+added for the three new models). Guards are the real ones from
+transcribe.py. Thirty outputs were also read blind. Call: switch to
+qwen3.5:9b, which happened the same day; then, after reading what its
+edits actually were (last table), polish was switched off entirely as a
+trial.
+
+Guards, of 548:
+
+| | qwen2.5:7b-instruct | qwen3.5:4b | qwen3.5:9b | gemma4:e4b |
+|---|---:|---:|---:|---:|
+| errors / timeouts | 0 | 0 | 0 | 0 |
+| suspicious length | 0 | 0 | 0 | 1 |
+| dropped question | 10 | 5 | 1 | 4 |
+| dropped profanity | 2 | 0 | 0 | 1 |
+| dropped sentence | 3 | 0 | 0 | 1 |
+| rejected, any guard | 14 (3%) | 5 (1%) | 1 (0%) | 6 (1%) |
+
+Over-editing, accepted outputs only:
+
+| | qwen2.5:7b-instruct | qwen3.5:4b | qwen3.5:9b | gemma4:e4b |
+|---|---:|---:|---:|---:|
+| accepted | 534 | 543 | 547 | 542 |
+| no-op (identical to input) | 127 (24%) | 252 (46%) | 377 (69%) | 298 (55%) |
+| word edit distance, mean | 0.052 | 0.014 | 0.005 | 0.011 |
+| edits changing over 10% of words | 84 | 20 | 6 | 10 |
+| deleted a content word | 122 (23%) | 33 (6%) | 10 (2%) | 33 (6%) |
+| added a content word | 52 (10%) | 25 (5%) | 5 (1%) | 5 (1%) |
+| fewer sentences than input | 19 | 10 | 7 | 13 |
+| changed a number | 5 | 12 | 0 | 7 |
+| lost a proper noun | 5 | 1 | 1 | 1 |
+| added an em dash | 4 | 0 | 0 | 0 |
+| added a semicolon | 8 | 17 | 6 | 6 |
+| residual fillers removed | 22 of 31 | 7 of 32 | 10 of 39 | 30 of 34 |
+| every swear kept (44 swearing inputs) | 42 (95%) | 44 | 44 | 43 (98%) |
+
+Latency, each model alone on the GPU next to Whisper, same 30 inputs:
+
+| | qwen2.5:7b-instruct | qwen3.5:4b | qwen3.5:9b | gemma4:e4b |
+|---|---:|---:|---:|---:|
+| cold load | 2.6s | 3.6s | 4.1s | 5.7s |
+| median polish | 0.76s | 0.68s | 1.05s | 0.69s |
+| p95 polish | 1.51s | 1.21s | 2.00s | 1.32s |
+| generation tok/s | 55 | 73 | 45 | 70 |
+| VRAM (/api/ps) | 4.8 GB | 3.1 GB | 5.2 GB | 3.1 GB |
+| disk | 4.7 GB | 3.4 GB | 6.6 GB | 9.6 GB |
+
+Full-pass fit of wall time against audio length: 7b 0.6 / 1.6 / 3.2s at 10
+/ 30 / 60s of audio; 4b 0.5 / 1.3 / 2.5; 9b 0.8 / 2.1 / 4.1; gemma 0.6 /
+1.4 / 2.7.
+
+Blind read: the 7b was the model that rewrites ("Wait, no, fuck that"
+became "What I'd like you to do is fuck that"; self-corrections cut;
+sentences shortened into tidier ones that weren't said). The 9b returned
+21 of 30 unchanged and never changed a meaning. The 4b broke an ellipsis
+into a hard stop, spelled "8 seconds" as "eight seconds", and added
+semicolons. Gemma punctuated run-ons best and removed fillers best, but
+reformatted numbers ("830" to "8:30").
+
+What the 9b's accepted edits actually were, 548 inputs:
+
+| change | share |
+|---|---:|
+| nothing | 69% |
+| punctuation or capitalization only | 14% |
+| a final period only | 7% |
+| words removed (mostly stammer restarts) | 6% |
+| filler words removed only | 2% |
+| a word changed or added | 2% |
+
+Three models resident at once next to Whisper oversubscribed the 16 GB
+card (9b fell to 19 tok/s, back to 44 once one was unloaded); the 9b's
+first 77 requests were excluded from its full-pass latency for that reason.
+
+## 2026-09-01 — Parakeet TDT 0.6B v2 vs large-v3-turbo
+
+886 retained clips (116.6 minutes; 661 under 10s, 207 at 10 to 30s, 18
+over 30s). Parakeet via onnx-asr 0.12.0, fp32 ONNX, onnxruntime-gpu 1.29.0
+CUDA 12 build (PyPI's 1.29.0 is a CUDA 13 build and silently fell back to
+CPU), in a scratch venv. Call: stay on Whisper. Parakeet is about twice as
+fast, but the saving is about 0.12s on a typical clip, and its habits run
+against the app.
+
+| | Whisper (live path) | Parakeet |
+|---|---:|---:|
+| median | 0.23s | 0.11s |
+| p95 | 0.43s | 0.21s |
+| under 10s, median | 0.22s | 0.10s |
+| 10 to 30s, median | 0.34s | 0.15s |
+| over 30s, median | 0.64s | 0.24s |
+| whole pass | 232s | 110s |
+| faster on | | 885 of 886 clips |
+| model load | 3.5s | 2.5s |
+| GPU memory on load | | ~3.5 GB |
+
+Agreement: corpus word disagreement 3.8%, per-clip median 0, p90 16%; 68%
+of clips word-identical. Rerunning Whisper against 80 live raw lines gave
+85% identical (noise floor, partly the batched switch). Disagreement
+categories: fillers and stutters (Parakeet keeps every "uh", "um" and
+phrase repeat; `clean_text()` would change 251 Parakeet outputs vs 121
+Whisper ones, and phrase repeats get past `_STUTTER`); numbers as words on
+48 clips ("three hundred and seventeen pounds", "Nvidia Fifty Ninety"), 26
+of them under the 8s polish gate, while Whisper's digits were right every
+time; no hotwords (WisprClone came out "Whisperclone" in all 15 clips,
+Claude "Clod" in 7 of 23); punctuation good (sentence-final punctuation on
+838 clips vs 622) but never an ellipsis; profanity identical (neither
+sanitizes); both 30s+ hallucination clips clean on both models; zero
+runaway repeats and zero empty outputs from either. Packaging: onnxruntime
+gpu can't share a venv with the CPU onnxruntime faster-whisper pulls in
+for Silero VAD, so Parakeet would be a full replacement, not a fallback.

@@ -23,9 +23,9 @@ which a same-length rewording trips. This is the same failure the
 rate. Fix: switched to qwen3.5:9b, which did it in 2% of outputs, with
 `"think": False` added to the requests. Status: fixed by model swap; the
 guards still cannot detect a meaning-preserving-length rewrite, so any
-future model change needs the same replay (scripts, inputs and
-outputs are kept in analysis_tools/results/2026-09-01/; the method is in
-LOG.md).
+future model change needs the same replay (tables in
+analysis_tools/results/README.md, data and scripts in the gitignored
+analysis_tools/results/2026-09-01/).
 
 ## 2026-09-01 — Five clean_text regexes corrupted real dictations
 

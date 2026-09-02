@@ -28,9 +28,9 @@ that it had in fact transcribed correctly, because it scores confident
 speech with no_speech_prob 0.60-0.86 and the app's segment filter drops
 anything over 0.6. Turbo never crosses that line on real speech. A switch
 would have meant retuning that filter or losing one dictation in fifty
-outright. Turbo stays. Scripts, both result sets and the report are kept in
-analysis_tools/results/2026-09-01/ (data gitignored, scripts committed);
-the method is the same as the Parakeet entry above.
+outright. Turbo stays. Tables in analysis_tools/results/README.md; data and scripts in
+analysis_tools/results/2026-09-01/ (gitignored); the method is the same as
+the Parakeet entry above.
 
 ## 2026-09-01 — Polish switched off as a trial
 
