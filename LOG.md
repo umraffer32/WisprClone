@@ -3,6 +3,32 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-01 — Polish "no change" sentinel tested and dropped
+
+With 69% of the 9b's polishes returning the text untouched, each one still
+pays the full retype (0.87s median on those inputs, 2.4s on a live 25s
+dictation). Three prompt variants tried over the same 548 replay inputs,
+all on qwen3.5:9b, no code changed:
+
+- Current prompt plus "if the text needs no changes, output exactly
+  NOCHANGE": 388 of 548 outputs were identical to the input, and the model
+  used the sentinel on 4 of them. It retypes by habit. When it did fire the
+  polish took 0.30s instead of 0.87s, so the saving is real, just never
+  claimed.
+- Sentinel instruction moved to the front with an example, probed on 40
+  no-op plus 20 edited inputs: fired on 16 of the 40 no-ops and wrongly on
+  7 of the 20 edited ones, skipping edits. Worse both ways.
+- A separate YES/NO "does this need cleanup" question (0.22s) before the
+  full polish: said NO to 30 of 40 no-ops but also to 8 of 20 edited
+  inputs, and the edits it would have skipped were the missing final
+  periods and commas the polish mostly exists to add. Net: about half of
+  polishes save ~0.65s, a third pay 0.22s more, and one in eight loses its
+  punctuation fix. Not worth it.
+
+Dropped. The remaining latency levers are the model itself (gemma4:e4b at
+0.69s median, with its number rewriting) or a higher min_audio_s; neither
+taken today.
+
 ## 2026-09-01 — Polish model switched to qwen3.5:9b after a four-model replay
 
 The 7b was two model generations old, so the same day's review asked
