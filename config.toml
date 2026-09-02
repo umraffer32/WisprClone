@@ -28,7 +28,7 @@ blocksize = 512
 
 [model]
 name = "large-v3-turbo"  # alternatives: "distil-large-v3" (fastest), "large-v3" (best ears)
-prompt = "Okay, so I've been testing WisprClone against Wispr Flow again. Claude, Fable, and Ollama all ran fine, and the SOQ draft and the claude.md file are done. Let's run it one more time and see what happens."
+prompt = "Okay, so I've been testing WisprClone against Wispr Flow again. Claude, Fable, and Ollama all ran fine, and the SOQ draft and the CLAUDE.md file are done. Let's run it one more time and see what happens."
                           # the text Whisper reads as "what came before" each
                           # dictation: it imitates the style and favors the
                           # vocabulary. Until 2026-09-02 this was a bare comma

@@ -11,7 +11,7 @@ knob is now `prompt`, and transcribe.py passes it to faster-whisper as
 an initial prompt is set, so the vocabulary has to live in the sentences.
 The prompt is Uriah's own three sentences from the chat, which scored best
 on vocabulary of the three tested (WisprClone right in 15 clips against
-the list's 9), plus "and the claude.md file" folded into the second
+the list's 9), plus "and the CLAUDE.md file" folded into the second
 sentence to carry ClaudeMD; that addition wasn't in the tested text.
 mine_merge_rule.py's tail-prompt helper now overrides the app prompt
 rather than passing initial_prompt twice. Live check after restart.
