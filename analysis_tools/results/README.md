@@ -13,6 +13,40 @@ Method common to all of these: no human-transcribed ground truth exists, so
 what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and hotwords).
 
+## 2026-09-02 — Granite Speech 3.3 2B vs large-v3-turbo
+
+981 clips (turbo baseline; Granite ran 990). Plain transformers stack
+(AutoModelForSpeechSeq2Seq, bfloat16, greedy, max_new_tokens 1200) in a
+scratch venv, Sonnet agent, main chat supervising; CUDA held through every
+install this time. Call: stay on turbo. Granite's output is normalized
+text: no capital letter in any of 990 clips, sentence punctuation in 21%,
+so it would need a separate punctuation and casing model before anything
+could be pasted. Beyond that it repeats the Canary pattern.
+
+| | turbo | Granite 2B |
+|---|---:|---:|
+| word disagreement (of 19,583 turbo words) | | 5.0% |
+| clips identical after normalizing | | 66% |
+| wall median | 0.24s | 1.33s |
+| wall p95 | 0.43s | 4.92s |
+| fit, per audio second | 0.011s | 0.18s |
+| whole pass | 257s | 1770s |
+| slower on | | 980 of 981 clips |
+| clips with any capital letter | 975 of 981 | 0 of 990 |
+| clips with . ! or ? | 713 | 211 |
+| clips returned empty | 0 | 1 (the 76s clip, nothing at all) |
+| turbo has a digit, Granite none | | 26 clips |
+| clips with um/uh | 9 | 13 |
+| wrote WisprClone for the hotword | 9 of 13 | 0 of 13 |
+| GPU memory | | ~5.9 GB |
+
+Disagreement by length: 4.1% under 10s, 3.6% at 10 to 30s, 15.5% over 30s
+(the empty 76s clip). Numbers as words throughout ("ninety percent",
+"seven eight second", and "5090" as "fiftie ninety"); "alright" to "all
+right" the single most common diff; profanity counts within one of turbo's.
+Setup notes in granite_install_notes.md (torchaudio's loader wants
+torchcodec; soundfile used instead). Load 8s, ~5 GB on disk.
+
 ## 2026-09-02 — Canary-Qwen 2.5B vs large-v3-turbo
 
 981 clips (the turbo baseline, extended that morning from 886; Canary ran

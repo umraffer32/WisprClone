@@ -3,6 +3,19 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Granite Speech 3.3 2B bake-off: stays on turbo
+
+Second candidate of the day, run the same way (Sonnet agent, same baseline,
+tables in analysis_tools/results/README.md). Rejected on the smoke test's
+first line before the pass even finished: Granite emits normalized text,
+all lowercase, no capital in any of 990 clips and sentence punctuation in
+a fifth of them. That's a transcript for scoring word error rate, not for
+pasting into a chat box, and fixing it would mean a second model in the
+pipeline. The rest matched Canary: 5.0% word disagreement, numbers as
+words on 26 clips, the WisprClone hotword never, 1.3s median against
+0.24s, and the 76s clip came back empty. Five candidates against one
+baseline now; the pattern holds and the queue is empty.
+
 ## 2026-09-02 — Canary-Qwen 2.5B bake-off: stays on turbo
 
 Top of the Open ASR Leaderboard for English (5.6% WER against large-v3's
