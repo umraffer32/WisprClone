@@ -3,6 +3,34 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-01 — large-v3 re-tested against large-v3-turbo on the batched path: stays on turbo
+
+With polish off and the batched pipeline making Whisper cheaper, the
+original "large-v3 hears best but costs a second" call was worth re-checking
+on real data. Both models ran the 886 retained clips through the live path
+(`Transcriber.pipe`, the app's decode options and hotwords). No ground
+truth, so this is disagreement plus a read of what the disagreements are.
+
+The two agree on 95% of words and 81% of clips outright. Most of the rest
+is style, not hearing: large-v3 writes "going to" and "want to" where turbo
+writes what was said ("gonna", "wanna"), fuses compounds ("gitignore",
+"venv", "onto", "servicenow"), and keeps fillers turbo drops ("you know",
+"uh", "I mean"), which the regexes then remove anyway. Real hearing
+differences went both ways and were rare: v3 got "grok" where turbo wrote
+"grock", turbo got "fuck Jordan" where v3 wrote "photjourn". v3 also ignored
+the WisprClone hotword in all nine clips that say it ("WhisprClone",
+"WhisperClone"), while turbo got it right.
+
+Two costs decided it. Latency: v3 was slower on 886 of 886 clips, median
+0.49s against 0.23s, 0.98s against 0.34s on 10-30s clips, 1.9s against
+0.64s over 30s. And a silent one: v3 returned nothing on 18 clips (2%)
+that it had in fact transcribed correctly, because it scores confident
+speech with no_speech_prob 0.60-0.86 and the app's segment filter drops
+anything over 0.6. Turbo never crosses that line on real speech. A switch
+would have meant retuning that filter or losing one dictation in fifty
+outright. Turbo stays. Scripts and both result sets are session-local
+(scratchpad); the method is the same as the Parakeet entry above.
+
 ## 2026-09-01 — Polish switched off as a trial
 
 Same day as the model swap, after reading what the 9b's edits actually
