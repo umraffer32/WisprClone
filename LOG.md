@@ -3,6 +3,21 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Whisper prompt switched from a hotword list to three sentences
+
+Applied the prompt-style result (entry below). config.toml's `hotwords`
+knob is now `prompt`, and transcribe.py passes it to faster-whisper as
+`initial_prompt` instead of `hotwords`; the library ignores hotwords once
+an initial prompt is set, so the vocabulary has to live in the sentences.
+The prompt is Uriah's own three sentences from the chat, which scored best
+on vocabulary of the three tested (WisprClone right in 15 clips against
+the list's 9), plus "and the claude.md file" folded into the second
+sentence to carry ClaudeMD; that addition wasn't in the tested text.
+mine_merge_rule.py's tail-prompt helper now overrides the app prompt
+rather than passing initial_prompt twice. Live check after restart.
+corrections.txt also gained the "<name> MD" to "<name>.md" lines the same
+day (no general rule: AMD is a real word here).
+
 ## 2026-09-02 — Whisper prompt style test: a punctuated prompt fixes the missing final period
 
 Uriah asked whether Whisper could do the polish itself. Not as a second

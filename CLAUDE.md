@@ -53,8 +53,8 @@ onboarding work unless explicitly asked.
   separate them from the app itself. Each still finds the repo root's
   `wisprclone.log`/`config.toml`/etc. via `BASE = Path(__file__).parent.parent`,
   and the three that import `transcribe.py` add the repo root to `sys.path`
-  first, since it no longer sits next to them. Personal vocabulary → Whisper
-  hotwords, the streaming pause-threshold
+  first, since it no longer sits next to them. Personal vocabulary → the Whisper
+  prompt, the streaming pause-threshold
   pick, the merge-rule simulation, a polish-quality/filler audit, the same
   audit replayed through a smaller polish model to judge a downsize (see
   LOG.md 2026-08-28), whether polishing pause-split transcript pieces in

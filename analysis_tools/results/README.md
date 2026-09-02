@@ -23,9 +23,9 @@ sentences: the three-sentence example from the chat exactly as Uriah
 pasted it back (no ClaudeMD, no digits), a three-sentence version with
 ClaudeMD and a clock time in it, and a one-sentence version. Whisper imitates the style of its prompt, so the bet
 was that a punctuated prompt yields punctuated output. It does, and it
-does not cost accuracy, vocabulary, or latency. Call: adopt a sentence prompt
-(which one is Uriah's pick; all three land within a few clips of each
-other, his own scored best on vocabulary), as the fix for the polish-off trial's
+does not cost accuracy, vocabulary, or latency. Call: adopted Uriah's three
+sentences, with "and the claude.md file" folded in for the ClaudeMD
+hotword (that addition untested; same shape as the tested prompts), as the fix for the polish-off trial's
 dominant quirk, the missing final period.
 
 | | baseline (hotword list) | Uriah's 3 sentences | long clean prompt | short clean prompt |

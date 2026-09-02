@@ -2,7 +2,7 @@
 
 Reads history.log (and wispr_flow_history.txt if present), prints summary
 tables only - no full transcripts - so the output is safe to share. The
-curated result goes into [model] hotwords in config.toml to bias Whisper
+curated result goes into the [model] prompt sentences in config.toml to bias Whisper
 toward words it would otherwise mishear.
 """
 

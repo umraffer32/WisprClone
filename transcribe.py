@@ -591,7 +591,7 @@ class Transcriber(threading.Thread):
         super().__init__(daemon=True, name="transcriber")
         self.cfg = cfg["model"]
         self.decode_opts = dict(DECODE_OPTS,
-                                hotwords=self.cfg.get("hotwords") or None)
+                                initial_prompt=self.cfg.get("prompt") or None)
         self.base_dir = base_dir
         self.jobs = jobs
         self.status = status
@@ -670,7 +670,7 @@ class Transcriber(threading.Thread):
         # Jobs run through faster-whisper's batched pipeline, not
         # WhisperModel.transcribe: the sequential path cuts audio into fixed
         # 30s windows, so a 30.6s clip leaves a 0.6s tail window that holds
-        # no speech but still gets the hotword prompt - Whisper fills it with
+        # no speech but still gets the prompt - Whisper fills it with
         # invented words (the "Xeon" x73 case, 2026-08-28) and then burns ~5s
         # retrying at higher temperatures. The pipeline cuts windows at VAD
         # silences instead and decodes them together. Measured on retained

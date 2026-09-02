@@ -108,7 +108,9 @@ def cut(audio, spans):
 
 
 def whisper_text(model, opts, audio, prompt=None):
-    segs, _ = model.transcribe(audio, initial_prompt=prompt, **opts)
+    # opts carries the app's own initial_prompt; a tail prompt replaces it
+    o = dict(opts, initial_prompt=prompt) if prompt is not None else opts
+    segs, _ = model.transcribe(audio, **o)
     # same segment filter as the live pipeline
     return " ".join(s.text.strip() for s in segs if s.no_speech_prob < 0.6)
 
