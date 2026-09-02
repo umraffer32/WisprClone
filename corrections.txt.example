@@ -6,3 +6,9 @@
 # gitignored on purpose - it fills up with things specific to you.
 github=GitHub
 there going=they're going
+
+# a spoken "<name> MD" is the file <NAME>.md; one line per file rather than a
+# general rule, since "AMD" is a word too
+ClaudeMD=CLAUDE.md
+readme MD=README.md
+setup MD=SETUP.md
