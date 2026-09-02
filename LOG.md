@@ -3,6 +3,20 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Whisper prompt style test: a punctuated prompt fixes the missing final period
+
+Uriah asked whether Whisper could do the polish itself. Not as a second
+pass, but its prompt shapes its style, and the app's prompt was a bare
+comma list of hotwords. Rewrapping the same hotwords as one punctuated
+sentence and running turbo over the 981 baseline clips cut the clips that
+end without punctuation from 291 to 19 (real sentences of 6+ words: 198 to
+7), with 0.7% word disagreement, hotword recall slightly up (WisprClone 9
+to 13), fillers unchanged, and no latency change. That's the dominant quirk
+of the polish-off trial (one paste in four last night) removed by a config
+string. The trade is a few spelling conventions shifting: "alright" comes
+out "all right" under the formal prompt, and "grock" becomes "grok". Tables
+in analysis_tools/results/README.md. Not yet applied to the app.
+
 ## 2026-09-02 — Granite Speech 3.3 2B bake-off: stays on turbo
 
 Second candidate of the day, run the same way (Sonnet agent, same baseline,
