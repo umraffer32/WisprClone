@@ -122,8 +122,14 @@ a failed polish must never lose a dictation). Always address it as
   adding another.
 - Writing or modifying code in this repo goes to an agent dispatched in an
   isolated git worktree (`isolation: "worktree"`), not written directly in
-  the main chat. Main chat still scopes the work, reviews the result, and
-  handles git. Which model gets the job is the main chat's call (decided
+  the main chat - except a genuinely trivial change (a handful of constants,
+  a one-line config value, a comment fix) with no logic to get wrong, which
+  the main chat can just edit directly. Noted 2026-09-02 after a pill-resize
+  dispatch (four constants in ui.py) that didn't need the overhead. Anything
+  that involves actual logic, more than a couple of lines, or any real
+  chance of a wrong call still goes through the isolated agent. Main chat
+  still scopes the work, reviews the result, and handles git either way.
+  Which model gets a dispatched job is the main chat's call (decided
   2026-09-02): Sonnet or Opus for anything small or well-specified, Fable
   only for the genuinely hard changes - subtle concurrency, a design that
   needs pressure-testing, a bug that resisted a first pass. From 2026-08-26
