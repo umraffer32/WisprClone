@@ -20,11 +20,11 @@ _BAR_RGB = (90, 200, 250)       # bright center of the bar gradient, and the glo
 _BAR_EDGE_RGB = (58, 118, 240)  # deeper blue the gradient falls to at the edges
 _ERR = "#c04040"
 _ALPHA = 0.65     # whole-pill translucency, Wispr-style (lower = more see-through)
-_W, _H, _RADIUS = 51, 20, 10  # ~20% down from 64x24x12 (2026-09-02); radius
-                              # stays exactly half the height, same capsule
-                              # ratio as before
+_W, _H, _RADIUS = 61, 20, 10  # width widened 20% again from 51 (2026-09-02),
+                              # height unchanged; radius stays exactly half
+                              # the height, same capsule ratio as before
 _PAD = 10  # transparent margin around the pill; the recording glow lives here
-_W_RESULT = 86  # wider: room for the checkmark, countdown, and dismiss X
+_W_RESULT = 103  # wider: room for the checkmark, countdown, and dismiss X
 _NBARS = 10
 _S = 4  # supersample factor: draw big, Lanczos down for antialiased edges
 
@@ -301,7 +301,7 @@ class Pill:
             # an X to dismiss early instead of waiting out the countdown.
             m = mid
             my = _PAD + _H / 2  # unscaled midline, for the hit-boxes
-            cx = (_PAD + 24) * S  # 30 scaled ~20% down with the rest of the pill
+            cx = (_PAD + 29) * S  # horizontal offset widened with the pill
             if self._check_flashing:
                 d.ellipse((cx - 9 * S, m - 9 * S, cx + 9 * S, m + 9 * S),
                           fill=_BAR)
@@ -317,10 +317,10 @@ class Pill:
             for px, py in (pts[0], pts[-1]):  # round caps
                 d.ellipse((px - 1.5 * S, py - 1.5 * S, px + 1.5 * S, py + 1.5 * S),
                           fill=check_fill)
-            self._check_box = (_PAD + 24 - 10, my - 10, _PAD + 24 + 10, my + 10)
-            d.text(((_PAD + 46) * S, m), str(max(1, math.ceil(level))),
+            self._check_box = (_PAD + 29 - 10, my - 10, _PAD + 29 + 10, my + 10)
+            d.text(((_PAD + 55) * S, m), str(max(1, math.ceil(level))),
                    fill="#aaaaaa", font=self._font_count, anchor="mm")
-            xx = (_PAD + self._w - _RADIUS - 6) * S  # 8 scaled the same way
+            xx = (_PAD + self._w - _RADIUS - 7) * S  # widened with the pill
             if self._x_dismissing:
                 d.ellipse((xx - 8 * S, m - 8 * S, xx + 8 * S, m + 8 * S),
                           fill=_ERR)
@@ -335,8 +335,8 @@ class Pill:
                    fill=x_fill, width=2 * S)
             d.line((xx - 4 * S, m + 4 * S, xx + 4 * S, m - 4 * S),
                    fill=x_fill, width=2 * S)
-            self._dismiss_box = (_PAD + self._w - _RADIUS - 14, my - 8,
-                                 _PAD + self._w - _RADIUS + 2, my + 8)
+            self._dismiss_box = (_PAD + self._w - _RADIUS - 15, my - 8,
+                                 _PAD + self._w - _RADIUS + 1, my + 8)
         elif state == "error":
             d.text((w / 2, h / 2), "error", fill="white",
                    font=self._font, anchor="mm")
