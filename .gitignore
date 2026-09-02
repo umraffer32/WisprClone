@@ -9,3 +9,8 @@ emphasis_words.txt
 WisprClone.lnk.startup-backup
 retained_audio/
 .claude/worktrees/
+# bake-off data and reports quote dictations; keep local, commit only scripts + README
+analysis_tools/results/**
+!analysis_tools/results/**/
+!analysis_tools/results/**/*.py
+!analysis_tools/results/**/README.md

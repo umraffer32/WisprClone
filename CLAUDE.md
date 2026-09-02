@@ -62,6 +62,13 @@ onboarding work unless explicitly asked.
   segment-parallel polish - see LOG.md), and Ollama's real request
   concurrency on this machine (serializes - `OLLAMA_NUM_PARALLEL:1`). Run
   by hand, summary output only.
+- `analysis_tools/results/<date>/` — saved bake-off baselines: the reference
+  transcripts of every retained clip per Whisper model (and Parakeet), the
+  polish-model replay inputs and outputs, the written reports, and the
+  scripts that produced them. Data and reports are gitignored (they quote
+  dictations); scripts and a README per date are committed. A future
+  candidate model only needs its own pass against these. First set
+  2026-09-01.
 
 ## Launching and restarting — read before touching a running instance
 
