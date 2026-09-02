@@ -11,7 +11,8 @@ folder, also untracked. Only this README is committed.
 Method common to all of these: no human-transcribed ground truth exists, so
 "accuracy" is measured as disagreement between candidates plus a read of
 what the disagreements are. Whisper baselines always run through the live
-app path (`Transcriber.pipe` with the app's decode options and hotwords).
+app path (`Transcriber.pipe` with the app's decode options and prompt;
+hotwords before 2026-09-02).
 
 ## 2026-09-02 — Chunk-join rule replay
 
