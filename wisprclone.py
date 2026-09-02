@@ -128,7 +128,7 @@ def main():
         run_echo(cfg)
         return
 
-    from audio import Cue, Ducker, Recorder
+    from audio import Ducker, Recorder
     from transcribe import Status, Transcriber
     from ui import Pill, make_tray
 
@@ -149,10 +149,6 @@ def main():
     if cfg["audio"]["duck"]:
         ducker = Ducker(cfg["audio"]["duck_factor"])
         ducker.start()
-    cue = None
-    if cfg["audio"]["cue"]:
-        c = Cue(BASE, cfg["audio"]["cue_volume"])
-        cue = c if c.ok else None
     sm = StateMachine(cfg, recorder)
     worker = Transcriber(cfg, BASE, jobs, status)
     worker.start()
@@ -276,11 +272,8 @@ def main():
             return
 
         rec_now = sm.state != IDLE
-        edge = rec_now != was_recording
-        if ducker and edge:
+        if ducker and rec_now != was_recording:
             ducker.set(rec_now)
-        if cue and edge:
-            cue.play(rec_now)
         was_recording = rec_now
 
         # Lost-release guard, PTT ONLY: suppressed events never update

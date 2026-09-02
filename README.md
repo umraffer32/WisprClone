@@ -19,7 +19,7 @@ The app is a single process, multi-threaded, no server, no IPC:
 - A **pynput listener thread** watches raw Win32 input events for the configured push-to-talk button or the toggle key.
 - A **PortAudio callback thread** owns the microphone stream and the audio buffer outright; every other thread only flips a boolean to tell it whether to be recording.
 - A **transcriber worker thread** pulls finished recordings off a queue, runs them through faster-whisper, cleans up the text, and pastes it.
-- A **ducker thread** (optional) lowers other apps' volume via pycaw while recording, and restores it after. A short clip also marks the start and stop through winsound, played straight to the default device so it isn't ducked.
+- A **ducker thread** (optional) lowers other apps' volume via pycaw while recording, and restores it after.
 - The **tkinter main thread** drives a 33ms UI tick that reads shared state and redraws the pill, plus the Win32 hook filters that need to run inline to suppress input events.
 
 Nothing shares mutable state without a clear owner: the audio buffer belongs to the callback thread alone, the recording state machine is protected by a single lock, and a small `Status` object is the only thing multiple threads touch concurrently for UI state.
@@ -53,7 +53,6 @@ Early versions ran an LLM polish pass over toggle-mode dictation through a local
 - Model: `large-v3-turbo` on CUDA — [SETUP.md](SETUP.md) has the reasoning behind that choice.
 - Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl tap for toggle mode.
 - Audio ducking on: other apps drop to 5% volume while I'm recording.
-- Start/stop cue on: a short clip marks when recording begins and ends.
 - Mic releases after 10 seconds idle so Windows' mic-in-use indicator clears quickly.
 - Repaste offer stays up for 10 seconds before it disappears on its own.
 

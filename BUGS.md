@@ -7,6 +7,19 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-02 — Start cue clip bled into the mic and corrupted the first word
+
+Symptom: dictated "pill" pasted as "pale" right after pressing the PTT
+button and starting to speak immediately, no delay between press and
+speech. Root cause: the newly added start-of-recording cue played through
+the speakers at the same instant the mic went hot, and with no echo
+cancellation and the mic close by, the clip's own audio overlapped the
+first word's onset in the recorded buffer, feeding Whisper a corrupted
+opening. The build's own notes had flagged this exact risk as untested
+when the feature shipped a few hours earlier. Fix: reverted the cue
+feature outright rather than tuning volume or a mute window - see LOG.md
+same date. Status: fixed by removal.
+
 ## 2026-09-02 — Mid-sentence capital after a pause in long dictations
 
 Symptom: "It stopped feeling Like it was built for the gamers" pasted from

@@ -21,8 +21,7 @@ onboarding work unless explicitly asked.
 - `audio.py` — `Recorder`: sounddevice callback, 250ms pre-roll, buffers
   blocks while recording, enqueues `{"blocks", "mode"}` jobs on stop and a
   `{"warm": True}` GPU-warm sentinel on start. Also `Ducker` (lowers other
-  apps' volume while the mic is hot) and `Cue` (plays the sounds/ clips via
-  winsound on record start/stop).
+  apps' volume while the mic is hot).
 - `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, chunk
   join `join_segments()` (lowercases a capital the batched pipeline puts at
   a mid-sentence chunk cut), regex `clean_text()`, LLM polish
@@ -35,10 +34,6 @@ onboarding work unless explicitly asked.
 - `emphasis_words.txt` — words never collapsed by the stutter-cleanup or
   runaway-repeat regexes (comma or not), one per line, applied live (no
   restart).
-- `sounds/` — `dictation-start.wav` / `dictation-stop.wav`, Wispr Flow's own
-  cue clips (see SETUP.md for where to get them). Gitignored: not
-  redistributable. A missing or unreadable clip disables the cue and logs a
-  warning instead of raising.
 - `history.log` — every pasted dictation, timestamped. Seeds the tray word
   counter. `wisprclone.log` (1MB rotating) holds diagnostics and per-job
   timing lines (`job: audio=… whisper=… polish=… mode=… polish_status=…

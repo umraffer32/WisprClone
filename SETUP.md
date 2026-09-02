@@ -77,10 +77,6 @@ Copy-Item emphasis_words.txt.example emphasis_words.txt
 
 One word per line. Anything on this list is never collapsed, comma or not. Also optional, also gitignored, also applied live.
 
-## Personalizing sounds/
-
-The start/stop cue (`cue` in `config.toml`) plays two clips: `sounds/dictation-start.wav` and `sounds/dictation-stop.wav`, created at the repo root. Any two short 16-bit WAV files work. If Wispr Flow is installed, its own defaults live at `%LOCALAPPDATA%\WisprFlow\app-<version>\resources\assets\sounds\`. This directory is gitignored, since those clips are Wispr Flow's own assets, not something to redistribute. Missing files just disable the cue - the app logs a warning and keeps running.
-
 ## RUNASADMIN — reaching elevated windows
 
 Some apps you might dictate into (an elevated terminal, an installer) run elevated themselves, and Windows won't deliver keyboard/mouse input from a non-elevated process into an elevated one. WisprClone needs to run elevated too, or dictation just silently won't reach those windows.

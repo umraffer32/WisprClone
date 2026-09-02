@@ -13,5 +13,3 @@ retained_audio/
 # the results README (tables and calls) is committed
 analysis_tools/results/**
 !analysis_tools/results/README.md
-# Wispr Flow's own cue clips, not redistributable
-sounds/

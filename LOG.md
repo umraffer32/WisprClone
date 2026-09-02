@@ -3,34 +3,25 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
-## 2026-09-02 — Start/stop cue plays Wispr Flow's own clips
+## 2026-09-02 — Start/stop cue reverted: the start clip bled into the mic
 
-Added a short audible cue on recording start and stop, matching what
-Wispr Flow plays on its dictation key. First cut synthesized a tone with
-numpy, but a real recording of Wispr Flow's own cue is a closer match to
-the sound I'm actually trying to replicate, so switched to playing its
-actual clips instead. Wispr Flow's bundle picks a sound set through
-`dh[folder || "default"]`, and with `selectedSoundFolder` unset that's the
-"default" set: the two top-level files in its install's
-`resources/assets/sounds/`, `dictation-start.wav` (0.180s) and
-`dictation-stop.wav` (0.219s), both 44100Hz stereo 16-bit PCM at a peak
-amplitude around 0.15. `Cue` now loads those two files from a new
-`sounds/` directory at the repo root (gitignored, not redistributable -
-see SETUP.md for where to copy them from) instead of generating anything,
-volume-scaling the int16 samples with numpy and keeping the source's own
-channel count and rate untouched. A missing file, or one that isn't
-16-bit PCM, logs a warning and disables the cue instead of raising.
+Built earlier the same day (Wispr Flow's own dictation-start/stop clips,
+played through winsound on the recording state edge), and reverted a few
+hours later. The build's own writeup already flagged the risk: the start
+clip plays at the same instant the mic goes hot, and the mic is close
+enough with no echo cancellation that the clip's own audio could bleed
+into the recorded buffer and land on top of the first word. It did.
+Uriah's own dictation of "pill" came back "pale" immediately after
+pressing the button and starting to speak right away.
 
-Playback still goes through `winsound.PlaySound` over opening a
-`sounddevice` stream per cue, which costs 50-300ms on this machine, and
-winsound is already stdlib. `SND_MEMORY | SND_ASYNC` was the first
-attempt, but Python's winsound raises `RuntimeError: Cannot play
-asynchronously from memory` for that combination, so each clip is
-volume-scaled once into a temp WAV file and played with `SND_FILENAME |
-SND_ASYNC` instead, still non-blocking. Hooked into `tick()`'s existing
-rising/falling edge check, the same one that drives the `Ducker`, so it
-never runs on a pynput hook thread and stays off the ducked volume path.
-New `[audio]` knobs `cue` and `cue_volume`.
+No threshold or volume tweak attempted - reverted outright (`git revert`
+of the cue commit) rather than lowering `cue_volume` or trying to mute a
+guard window in the recorded audio, since the ask was to remove the sound,
+not tune it. `sounds/dictation-start.wav` and `dictation-stop.wav` deleted
+locally too. A future revisit would need a way to keep the cue audible
+without it reaching the mic, e.g. routing it away from the input path
+entirely or muting a known window of the recording during playback -
+nothing here explored either.
 
 ## 2026-09-02 — Chunk joins no longer capitalize a continued sentence
 
