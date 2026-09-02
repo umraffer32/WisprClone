@@ -7,6 +7,25 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-01 — qwen2.5:7b polish paraphrased past the prompt and the guards
+
+Found by the four-model polish replay, not by any single complaint. Over
+548 real inputs the 7b deleted a content word from 23% of the outputs the
+guards accepted and added one to 10%; in a blind read it turned "Wait, no,
+fuck that" into "What I'd like you to do is fuck that", "which I honestly
+have no fucking idea does anyway" into "I honestly have no fucking idea
+why", cut self-corrections and trailing "Ah, okay"s, and compressed
+sentences into tidier ones that weren't said. Root cause: the prompt asks
+for cleanup only, but the model paraphrases anyway, and the guards check
+length ratio, swear count, question marks and whole-sentence loss, none of
+which a same-length rewording trips. This is the same failure the
+2026-08-31 downsize revert blamed on the 3b, present in the 7b at a lower
+rate. Fix: switched to qwen3.5:9b, which did it in 2% of outputs, with
+`"think": False` added to the requests. Status: fixed by model swap; the
+guards still cannot detect a meaning-preserving-length rewrite, so any
+future model change needs the same replay (scripts in the 2026-09-01
+scratchpad were session-local; the method is in LOG.md).
+
 ## 2026-09-01 — Five clean_text regexes corrupted real dictations
 
 Found by reading all 73 raw/out diffs the regex layer had logged since

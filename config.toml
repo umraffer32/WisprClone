@@ -62,15 +62,19 @@ min_audio_s = 8         # skip polish under this many seconds of audio - pure
                         # instant (polish costs ~0.4-0.6s on a short clip).
                         # Started at 5 (tax noticeable on 5-8s clips), went
                         # to 10, settled at 8 - all same-day feel tuning.
-model = "qwen2.5:7b-instruct"  # served locally by Ollama at 127.0.0.1:11434 -
-                        # switched back from qwen2.5:3b-instruct 2026-08-31:
-                        # the 3b's edits were noticeably rougher in daily use
-                        # despite the guards catching the worst of it, and the
-                        # latency saved wasn't worth the quality loss. 3b stays
-                        # pulled in Ollama in case this needs reverting again.
+model = "qwen3.5:9b"    # served locally by Ollama at 127.0.0.1:11434 -
+                        # switched from qwen2.5:7b-instruct 2026-09-01 after a
+                        # 548-dictation replay showed the 7b paraphrasing past
+                        # the prompt (a real word deleted in 23% of accepted
+                        # outputs, meanings inverted) and the 9b nearly never
+                        # (2%), at ~0.3s more per polish. The request sends
+                        # "think": false, or this model reasons instead of
+                        # answering. 7b and 3b stay pulled in Ollama in case
+                        # this needs reverting.
 timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
-                        # dictation polishes in ~16-18s measured, so 30 leaves
-                        # headroom (re-derive if max_recording_s changes). An
+                        # dictation polishes in ~16-18s measured on the 7b,
+                        # ~20s by the 9b's fit, so 30 leaves headroom
+                        # (re-derive if max_recording_s changes). An
                         # Ollama that isn't running fails on connect instantly
                         # regardless of this value.
 min_ratio = 0.4         # reject the polish result outside [min_ratio, max_ratio]

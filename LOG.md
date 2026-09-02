@@ -3,6 +3,48 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-01 — Polish model switched to qwen3.5:9b after a four-model replay
+
+The 7b was two model generations old, so the same day's review asked
+whether a newer small model does the polish job better. Four models ran the
+exact `_polish()` request over 548 real inputs (317 from the log's polish
+diffs, 231 from the day's Whisper pass through clean_text, clips over 8s):
+qwen2.5:7b-instruct as the baseline, qwen3.5:4b, qwen3.5:9b, gemma4:e4b.
+Scored on the real guards imported from transcribe.py, word-level edit
+distance, deleted and added content words, changed numbers, swears kept,
+residual fillers removed, and latency, plus thirty outputs read blind.
+
+The baseline lost. The 7b deleted a real word from 122 of its 534 accepted
+outputs (23%), added one to 52, tripped the guards 14 times, and in the
+blind read was the model that rewrites: "Wait, no, fuck that" became "What
+I'd like you to do is fuck that", "no fucking idea does anyway" became "no
+fucking idea why", and half the samples came back shorter and tidier than
+what was said. The prompt forbids all of it and no guard can see it. That is
+the "rougher" the 2026-08-31 entry pinned on the 3b; the 7b does it too with
+better grammar. The 9b deleted a word in 10 outputs (2%), added one in 5,
+tripped one guard, changed no numbers, kept every swear in all 44 swearing
+inputs, and returned 69% of inputs untouched. Cost: median 1.05s against
+0.76s alone on the GPU (about 2.1s vs 1.6s on a 30s dictation), 4.1s cold
+load against 2.6s, 5.2 GB VRAM against 4.8. The 4b was only 0.08s faster
+than the 7b, spelled digits out as words in 12 outputs and added semicolons
+in 17, so no downsize. Gemma matched the 7b's speed with far less damage and
+the best filler cleanup, but reformatted numbers ("830" to "8:30") and loads
+in 5.7s; it's the fallback if the 9b's latency grates.
+
+Two code lines: `"think": False` in both Ollama request bodies. Qwen 3.5 and
+Gemma 4 reason by default and spent the whole num_predict budget on it,
+returning empty. It's a top-level field, not an option, and qwen2.5 accepts
+and ignores it, so the rollback is the config line alone. The replay was
+Ollama's raw-prompt shape throughout, which these models' templates pass
+through unchanged. Verified the real `_polish()`/`_warm_polish()` path
+against the 9b offline before restart; live check after. The bake-off
+agent was also the first to hit the 16 GB card's limit: three resident
+models next to Whisper dropped the 9b to 19 tok/s, so after the switch
+`ollama stop qwen2.5:7b-instruct` once rather than leaving both loaded.
+The 7b and 3b stay pulled. Still open from the review: the "no change"
+sentinel, less compelling now that 69% of polishes are no-ops that cost
+about 0.5s each.
+
 ## 2026-09-01 — Parakeet bake-off: stays on Whisper
 
 Last open item from the review. NVIDIA Parakeet TDT 0.6B v2 (English-only,

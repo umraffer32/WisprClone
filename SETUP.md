@@ -112,12 +112,14 @@ Everything above gets you a fully working push-to-talk dictation tool. This sect
 **Install and pull the model:**
 
 ```powershell
-ollama pull qwen2.5:7b-instruct
+ollama pull qwen3.5:9b
 ```
 
 I tried a more permissive model here for a few days after finding qwen would quietly sanitize profanity despite an explicit prompt rule to preserve it — an alignment habit that's hard to prompt away. But a same-size replay across 405 real dictations showed the permissive model doing real cleanup work on only 29% of them, against 69% for qwen, with no meaningful latency difference. So the fix isn't the model, it's not trusting the prompt: `_polish` now checks the actual swear count in and out and falls back to the raw transcript if any went missing, the same way it already falls back on a suspicious length ratio, a dropped question, or a whole sentence's content going missing.
 
 I ran qwen2.5 at 7B for a while, then downsized to the 3B version once polish turned out to be the real latency cost in the whole pipeline, not whisper. A replay of the corpus at the time showed 3B no-opping less than 7B did (13% vs 31%) at roughly half the latency, with a small uptick in flagged edits that the guards above already catch and fall back on. In daily use the 3B's edits still read rougher often enough that it wasn't worth the speed, so I switched back to 7B. It's still a real model either way, so it needs some VRAM or RAM alongside whatever whisper is already using — more so on 7B.
+
+The current model is qwen3.5:9b. On 2026-09-01 I replayed 548 real dictations through four models with the exact request the app sends (qwen2.5:7b, qwen3.5:4b, qwen3.5:9b, gemma4:e4b) and read thirty of them blind. The 7b turned out to be the one that rewrites: it deleted a real word from 23% of the outputs the guards accepted, paraphrased, and inverted a meaning or two, all things the prompt forbids and the guards can't see. The 9b did that in 2% of outputs, changed no numbers, kept every swear, and returned 69% of dictations untouched, at about 0.3s more per polish. The 4b was only marginally faster and spelled digits out as words. Gemma matched the 7b's speed with far less damage but reformatted numbers and took twice as long to load cold. One thing to know if you swap in any model from the Qwen 3.5 or Gemma 4 families: they reason by default and burn the whole output budget doing it, so `_polish` sends `"think": false` as a top-level request field.
 
 **Why it exists at all, briefly:** I originally added this pass, then removed it entirely — code and Ollama dependency both — because it added latency for wording changes I didn't actually want most of the time. It came back once the regex-only cleanup step (`clean_text()`) started accumulating one hand-written pattern per quirk faster than felt sustainable. An LLM pass absorbs that whole category of fix in one place instead.
 

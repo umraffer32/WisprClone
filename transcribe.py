@@ -738,6 +738,7 @@ class Transcriber(threading.Thread):
         try:
             _ollama.post("http://127.0.0.1:11434/api/generate", json={
                 "model": self.polish_cfg["model"], "keep_alive": "24h",
+                "think": False,
                 # same num_ctx as _polish, or this warmup loads the model at
                 # Ollama's 4096 default and the first real polish pays a full
                 # reload mid-dictation (~4s, measured)
@@ -762,6 +763,11 @@ class Transcriber(threading.Thread):
             r = _ollama.post("http://127.0.0.1:11434/api/generate", json={
                 "model": p["model"], "stream": False, "keep_alive": "24h",
                 "prompt": POLISH_PROMPT + text,
+                # think: Qwen 3.5 (and Gemma 4) reason by default and spend
+                # the whole num_predict budget doing it, returning an empty
+                # response (2026-09-01 replay). Top-level field, not an
+                # option; models without a thinking mode accept and ignore it.
+                "think": False,
                 # num_ctx: Ollama's runtime default is 4096 tokens, which a
                 # max-length dictation approaches; overflow silently truncates
                 # the FRONT of the prompt - the instructions - leaving the
