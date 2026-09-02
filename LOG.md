@@ -3,6 +3,27 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-01 — Polish switched off as a trial
+
+Same day as the model swap, after reading what the 9b's edits actually
+were. Across the 548 replay inputs the polish returned the text untouched
+69% of the time, changed only punctuation or capitalization in 14%, added
+just a final period in 7%, and touched words in 10%: stammer restarts
+removed in 6%, fillers in 2%, a word changed or added in 2%. Whisper already
+punctuates, and the regexes already catch single-word stutters, so the pass
+was costing about a second on every dictation over 8s (40% of them) for
+word-level work on one in ten of those. Uriah's read: rarely used, and not
+substantial when it is.
+
+config.toml `[polish] enabled = false`; nothing else changed. With the flag
+off the app never contacts Ollama (the warm-up is gated on it too), so the
+9b drops out of VRAM on its own after its 24h keep-alive. The trial is
+judged from history.log: pasted dictations that end without a period, and
+phrase-level stammers ("would then would that") the regexes can't catch,
+are the two things the polish was actually fixing. If they show up often
+enough to notice, the fix is one config line and a restart; the model and
+the guards stay in place.
+
 ## 2026-09-01 — Polish "no change" sentinel tested and dropped
 
 With 69% of the 9b's polishes returning the text untouched, each one still

@@ -3,7 +3,9 @@
 Local push-to-talk dictation for Windows. Hold the mouse X2 button to record,
 release to transcribe (faster-whisper on CUDA) and paste into the focused app.
 Tap Right Ctrl to toggle long-form recording. Dictations over min_audio_s
-(either mode) also get an LLM polish pass through a local Ollama model.
+(either mode) can also get an LLM polish pass through a local Ollama model;
+that pass is switched off in config.toml since 2026-09-01 as a trial (see
+LOG.md), so the app currently makes no Ollama calls at all.
 Everything runs on this machine; no dictation audio or text leaves it.
 
 Personal tool, not a planned public release (see README.md's Scope section —

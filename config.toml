@@ -56,7 +56,13 @@ continuation_gap_s = 4  # fallback only: the primary path reads the focused
                        # 0 = never stitch blind
 
 [polish]
-enabled = true          # LLM cleanup pass on dictations from either mode
+enabled = false         # LLM cleanup pass on dictations from either mode.
+                        # Off since 2026-09-01 as a trial: over 548 real
+                        # polished dictations the 9b changed nothing in 69%
+                        # and only punctuation in another 21%, so the pass
+                        # cost ~1s per dictation over min_audio_s for word
+                        # level edits on about one in ten. Flip back to true
+                        # (and restart) to re-enable; the model stays pulled.
 min_audio_s = 8         # skip polish under this many seconds of audio - pure
                         # latency protection so quick bursts keep feeling
                         # instant (polish costs ~0.4-0.6s on a short clip).
