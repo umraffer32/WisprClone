@@ -112,6 +112,16 @@ a failed polish must never lose a dictation). Always address it as
   changes. Never a paragraph-plus-sub-bullets per file - that detail goes
   in LOG.md, not the commit body. Reinforced 2026-08-26 after drifting into
   exactly that on three same-day commits.
+- Commit a code change only after Uriah has confirmed it works live (tray
+  Restart, a real dictation), not right away once it passes offline checks
+  (syntax, tomllib load, a standalone script). Decided 2026-09-02 after the
+  start/stop cue was committed immediately, then turned out to bleed into
+  the mic and needed a revert plus LOG.md/BUGS.md entries to undo - work
+  that a change never committed wouldn't have needed. Local commits still
+  happen promptly once confirmed (an atomic, cleanly revertible unit beats
+  leaving it uncommitted while later edits pile on top - this environment
+  has no interactive git to un-tangle a mixed uncommitted diff). Pushing
+  was never the issue; that already only happens on request.
 - Config knobs belong in config.toml; internal sanity thresholds stay in code.
 - clean_text() regexes are one-quirk-per-pattern; check the polish pass before
   adding another.
