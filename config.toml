@@ -81,8 +81,9 @@ model = "qwen3.5:9b"    # served locally by Ollama at 127.0.0.1:11434 -
                         # outputs, meanings inverted) and the 9b nearly never
                         # (2%), at ~0.3s more per polish. The request sends
                         # "think": false, or this model reasons instead of
-                        # answering. 7b and 3b stay pulled in Ollama in case
-                        # this needs reverting.
+                        # answering. The other polish models tried were
+                        # removed from Ollama 2026-09-02; this is the only one
+                        # pulled, and it stays while the polish-off trial runs.
 timeout_s = 30          # covers the worst case max_recording_s allows: a 300s
                         # dictation polishes in ~16-18s measured on the 7b,
                         # ~20s by the 9b's fit, so 30 leaves headroom
