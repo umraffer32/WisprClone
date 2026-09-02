@@ -59,6 +59,15 @@ Setup notes: `pip install nemo_toolkit[asr]` from trunk, then reinstall
 torch from the cu126 index with `--no-deps`, plus `peft` and `accelerate`
 which the model class imports without declaring. Load 29s, 4.8 GB on disk.
 
+Reproducibility check, same day: 30 clips rerun (25 random plus 5 of the
+digit cases) came back byte-identical to the saved pass, 30 of 30, so the
+decoding is deterministic and the numbers-as-words habit is systematic,
+not noise. The two long clips rerun with max_new_tokens raised from 400 to
+1200 produced the same shortened output (131 and 138 words), so the cut is
+the model skipping a middle stretch of the audio, not the token cap; the
+output still ends on the clip's real last sentence. Median wall on the
+rerun 1.37s with nothing else on the GPU. Script: canary_repeat.py.
+
 ## 2026-09-01 — large-v3 vs large-v3-turbo on the batched path
 
 886 retained clips, both models through `Transcriber.pipe`. Call: stay on
