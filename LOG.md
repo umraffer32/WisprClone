@@ -3,6 +3,33 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Canary-Qwen 2.5B bake-off: stays on turbo
+
+Top of the Open ASR Leaderboard for English (5.6% WER against large-v3's
+7.4%) and, unlike Parakeet, built on a language-model decoder, so it looked
+like the one candidate that might write digits and skip fillers on its own.
+It doesn't. Over 981 retained clips through the same method as the Parakeet
+and large-v3 runs (tables in analysis_tools/results/README.md), it agreed
+with turbo on 96.5% of words, and the disagreements were the familiar
+ones: numbers as words on 22 clips, three times the filler words kept, the
+WisprClone hotword never once ("Whisperclone" in all 14), compounds split
+("wi fi", "screen shot"). Hearing differences were rare and went both ways.
+Two new problems on top: it dropped the second half of the longest
+dictation (76s, 235 words to 131) and a sentence from a 69s one, and it is
+slow, 1.2s median against 0.24s, nearly 3s on a typical toggle dictation
+and 7s over 30s, at 10 GB of VRAM. Rejected. That's three non-Whisper and
+one Whisper candidate tested against the same baseline in two days, all
+rejected on the same pattern: leaderboard accuracy measured on normalized
+text says nothing about digits, fillers, hotwords, or long-clip behavior,
+which is what this app actually depends on.
+
+Process note, now in CLAUDE.md: the run went to a Sonnet agent with a
+progress file and the main chat supervising, and cost about 3% of a usage
+window against the Fable max-effort polish run the day before that got cut
+off by the limit. The supervision earned its keep once: NeMo's install
+quietly replaced the CUDA torch wheel with a CPU one, and the milestone
+line that said so is what stopped a two-hour CPU pass with junk timings.
+
 ## 2026-09-01 — large-v3 re-tested against large-v3-turbo on the batched path: stays on turbo
 
 With polish off and the batched pipeline making Whisper cheaper, the

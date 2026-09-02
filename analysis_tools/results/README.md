@@ -13,6 +13,52 @@ Method common to all of these: no human-transcribed ground truth exists, so
 what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and hotwords).
 
+## 2026-09-02 — Canary-Qwen 2.5B vs large-v3-turbo
+
+981 clips (the turbo baseline, extended that morning from 886; Canary ran
+986, the 5 newest had no baseline). Canary-Qwen via NeMo 3.1 trunk on
+torch 2.14 cu126 in a scratch venv (the NeMo install silently replaced the
+CUDA torch with a CPU wheel; caught and reinstalled before the pass). Run by
+a Sonnet agent with the main chat supervising. Call: stay on turbo. Canary
+is the most accurate open English model on the leaderboard, but on this
+voice it agrees with turbo as closely as the others did, spells numbers as
+words, keeps fillers, has no hotwords, dropped half of the longest
+dictation, and costs five to nine times the latency.
+
+| | turbo | Canary-Qwen |
+|---|---:|---:|
+| word disagreement (of 19,583 turbo words) | | 3.5% |
+| clips identical after normalizing | | 713 (73%) |
+| wall median | 0.24s | 1.20s |
+| wall p95 | 0.43s | 4.57s |
+| clips under 10s, median | 0.22s | 0.89s |
+| 10 to 30s, median | 0.33s | 2.91s |
+| over 30s, median | 0.64s | 6.96s |
+| fit, per audio second | 0.011s | 0.174s |
+| whole pass | 257s | 1596s |
+| slower on | | 981 of 981 clips |
+| clips returned empty | 0 | 0 |
+| clips with under 70% of turbo's words | | 1 (the 76s clip: 235 words to 131) |
+| turbo has a digit, Canary none | | 22 clips |
+| clips with um/uh in the raw output | 9 | 27 |
+| wrote WisprClone for the hotword | 9 of 14 | 0 of 14 |
+| GPU memory during generation | | ~10 GB |
+
+Disagreement by length: 3.3% under 10s, 2.6% at 10 to 30s, 9.1% over 30s,
+the last driven by the 76s clip losing its second half and a 69s clip
+losing a sentence; a decoder that generates token by token has a length
+where it stops. What the rest of the disagreements were: compound
+splitting ("chat gpt", "wi fi", "screen shot", "stand by"), "alright" to
+"all right" throughout, numbers as words ("twenty twenty six", "one
+hundred percent", "seven eight second video"), more fillers kept. Real
+hearing differences went both ways and were rare: Canary got "grok" and
+"chat gpt"; turbo got "thumbs up" (Canary "dumza"), "Fable" (Canary
+"fawa"), "Asmongold", "C++" (Canary "C"). Profanity counts identical.
+Casing and punctuation are good, and it never produced an empty output.
+Setup notes: `pip install nemo_toolkit[asr]` from trunk, then reinstall
+torch from the cu126 index with `--no-deps`, plus `peft` and `accelerate`
+which the model class imports without declaring. Load 29s, 4.8 GB on disk.
+
 ## 2026-09-01 — large-v3 vs large-v3-turbo on the batched path
 
 886 retained clips, both models through `Transcriber.pipe`. Call: stay on

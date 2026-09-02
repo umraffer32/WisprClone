@@ -126,6 +126,18 @@ a failed polish must never lose a dictation). Always address it as
   transcript dumped verbatim) and relay each one as 2-3 plain sentences of
   what it's actually doing, not just "still working." Stop the heartbeat
   the moment the real completion notice arrives.
+- Offline measurement runs (model bake-offs, replays, environment setup,
+  looping files through a model) go to a Sonnet agent, not Fable: the work
+  is mechanical and Sonnet did the whole Canary-Qwen run on 2026-09-02 for
+  ~3% of a usage window, where Fable at max effort on the polish bake-off
+  the day before burned through the limit. The agent appends one plain
+  sentence per milestone to a progress file; the main chat runs a Monitor
+  on it and reads each line against what should be true at that point
+  (this caught NeMo swapping the CUDA torch for a CPU wheel). Fable stays
+  for app code changes and for judgment-heavy reads such as blind
+  side-by-side quality calls; the main chat can do the read itself from
+  saved JSON when it's small. Tell agents not to wake on every progress
+  milestone, only on a pass finishing or failing.
 - Before pushing any commit, check whether it makes a doc stale - CLAUDE.md,
   README.md, SETUP.md, or a comment elsewhere - and fix it in the same push,
   not a later cleanup pass. Decided 2026-08-26 after a repo-wide review
