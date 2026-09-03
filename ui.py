@@ -6,6 +6,8 @@ import ctypes.wintypes as wt
 import logging
 import math
 import os
+import threading
+import time
 import tkinter as tk
 
 import numpy as np
@@ -49,6 +51,14 @@ _user32.ReleaseDC.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
 _user32.UpdateLayeredWindow.argtypes = (
     ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
     ctypes.c_void_p, ctypes.c_void_p, wt.DWORD, ctypes.c_void_p, wt.DWORD)
+_user32.GetForegroundWindow.restype = ctypes.c_void_p
+_user32.GetWindowThreadProcessId.argtypes = (ctypes.c_void_p, ctypes.POINTER(wt.DWORD))
+
+_k32 = ctypes.windll.kernel32
+_k32.OpenProcess.restype = ctypes.c_void_p
+_k32.QueryFullProcessImageNameW.argtypes = (
+    ctypes.c_void_p, wt.DWORD, ctypes.c_wchar_p, ctypes.POINTER(wt.DWORD))
+_k32.CloseHandle.argtypes = (ctypes.c_void_p,)
 
 _gdi32 = ctypes.windll.gdi32
 _gdi32.CreateCompatibleDC.restype = ctypes.c_void_p
@@ -75,6 +85,81 @@ class _BLENDFUNCTION(ctypes.Structure):
                 ("SourceConstantAlpha", ctypes.c_ubyte), ("AlphaFormat", ctypes.c_ubyte)]
 
 
+_ANCHOR_EXE = "claude.exe"  # Claude Code desktop
+_ANCHOR_EDIT = "Prompt"     # its compose box's UI Automation name
+
+
+def _exe_name(hwnd):
+    pid = wt.DWORD()
+    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    h = _k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ""
+    buf = ctypes.create_unicode_buffer(260)
+    n = wt.DWORD(260)
+    _k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n))
+    _k32.CloseHandle(h)
+    return os.path.basename(buf.value).lower()
+
+
+class Anchor(threading.Thread):
+    """Center x of the Claude Code compose box while that app is in the
+    foreground, else None (the pill then keeps its dragged/default center).
+    Read through UI Automation on its own thread: a stalled provider must
+    never hold up tick(). Probed 2026-09-02: the app authors its tree, so
+    the box is a named Edit whose rect follows the chat column as the
+    app's side panels open and close - a full-tree search to find it costs
+    ~20ms, each rect read of the found element ~0.1ms."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.cx = None
+
+    def run(self):
+        try:
+            import comtypes
+            import comtypes.client
+            comtypes.CoInitialize()
+            comtypes.client.GetModule("UIAutomationCore.dll")
+            from comtypes.gen import UIAutomationClient as UIA
+            uia = comtypes.client.CreateObject(UIA.CUIAutomation,
+                                               interface=UIA.IUIAutomation)
+            cond = uia.CreateAndCondition(
+                uia.CreatePropertyCondition(UIA.UIA_ControlTypePropertyId, 50004),  # Edit
+                uia.CreatePropertyCondition(UIA.UIA_NamePropertyId, _ANCHOR_EDIT))
+        except Exception:
+            log.exception("UI Automation unavailable; pill stays at its own center")
+            return
+        hwnd = box = None
+        wanted = False
+        next_find = 0.0
+        while True:
+            try:
+                fg = _user32.GetForegroundWindow()
+                if fg != hwnd:
+                    hwnd, box = fg, None
+                    wanted = _exe_name(fg) == _ANCHOR_EXE
+                if wanted and box is None and time.monotonic() >= next_find:
+                    next_find = time.monotonic() + 1.0
+                    box = uia.ElementFromHandle(hwnd).FindFirst(
+                        UIA.TreeScope_Descendants, cond)
+                cx = None
+                if box is not None:
+                    r = box.CurrentBoundingRectangle
+                    x0 = _user32.GetSystemMetrics(76)  # SM_XVIRTUALSCREEN
+                    if r.right > r.left and x0 <= r.left < x0 + _user32.GetSystemMetrics(78):
+                        cx = (r.left + r.right) // 2
+                    else:
+                        box = None  # dead node (conversation switched): search again
+                self.cx = cx
+            except Exception:
+                # a stale element (conversation switched, app closed) throws
+                # on the rect read; drop it and search again next second
+                log.debug("anchor read failed", exc_info=True)
+                box, self.cx = None, None
+            time.sleep(0.1)
+
+
 class Pill:
     def __init__(self, root, on_result_click=None, on_dismiss=None, pos_file=None):
         self.root = root
@@ -89,8 +174,9 @@ class Pill:
         self._y = sh - _H - 60 - _PAD  # window top y
         self._pos_file = pos_file
         self._load_pos(sw, sh)
-        root.geometry(f"{_W + 2 * _PAD}x{_H + 2 * _PAD}"
-                      f"+{self._cx - (_W + 2 * _PAD) // 2}+{self._y}")
+        self._anchor = Anchor()
+        self._anchor.start()
+        self._placed = None  # (w, x, y) last given to geometry()
         # NOACTIVATE means clicks and drags never steal focus from the app
         # the user wants to paste into - the whole point of the feature
         root.bind("<Button-1>", self._press)
@@ -160,17 +246,26 @@ class Pill:
             self._y = self.root.winfo_y()
             self._save_pos()
             self._dragged = False
+            self._placed = None  # re-place: an anchored pill snaps back in x
         else:
             self._clicked(event)
 
-    def _resize(self, w):
-        if self._w == w:
+    def _place(self):
+        """Center on the Claude compose box when it's in front, else on the
+        dragged/default center clamped on-screen. Skipped mid-drag so it
+        can't fight the mouse."""
+        if self._dragged:
             return
-        self._w = w
-        # widen/narrow around the dragged center, clamped on-screen
-        sw = self.root.winfo_screenwidth()
-        x = min(max(self._cx - (w + 2 * _PAD) // 2, -_PAD), sw - w - _PAD)
-        self.root.geometry(f"{w + 2 * _PAD}x{_H + 2 * _PAD}+{x}+{self._y}")
+        w = self._w + 2 * _PAD
+        cx = self._anchor.cx
+        if cx is None:
+            sw = self.root.winfo_screenwidth()
+            x = min(max(self._cx - w // 2, -_PAD), sw - self._w - _PAD)
+        else:
+            x = cx - w // 2
+        if (w, x, self._y) != self._placed:
+            self._placed = (w, x, self._y)
+            self.root.geometry(f"{w}x{_H + 2 * _PAD}+{x}+{self._y}")
 
     @staticmethod
     def _in_box(x, y, box):
@@ -377,7 +472,8 @@ class Pill:
         if state == "hidden":
             self._hide()
             return
-        self._resize(_W_RESULT if state == "result" else _W)
+        self._w = _W_RESULT if state == "result" else _W
+        self._place()
         self._show()
         if state == "recording":
             # x24: sized so a normal voice at ~2.5ft on this quiet mic drives

@@ -20,6 +20,7 @@ The app is a single process, multi-threaded, no server, no IPC:
 - A **PortAudio callback thread** owns the microphone stream and the audio buffer outright; every other thread only flips a boolean to tell it whether to be recording.
 - A **transcriber worker thread** pulls finished recordings off a queue, runs them through faster-whisper, cleans up the text, and pastes it.
 - A **ducker thread** (optional) lowers other apps' volume via pycaw while recording, and restores it after.
+- An **anchor thread** polls UI Automation for the Claude Code compose box while that app is in front and publishes its center x, so the pill sits under the chat column even as the app's side panels open and close. Any other app in front, or a failed read, and the pill keeps its dragged/default center.
 - The **tkinter main thread** drives a 33ms UI tick that reads shared state and redraws the pill, plus the Win32 hook filters that need to run inline to suppress input events.
 
 Nothing shares mutable state without a clear owner: the audio buffer belongs to the callback thread alone, the recording state machine is protected by a single lock, and a small `Status` object is the only thing multiple threads touch concurrently for UI state.

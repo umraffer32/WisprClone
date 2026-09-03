@@ -28,7 +28,9 @@ onboarding work unless explicitly asked.
   (duration-gated, mode-agnostic), clipboard paste. Also the polish prompt
   and its output guards.
 - `ui.py` — recording pill overlay (draggable; position persists in the
-  gitignored `pill_pos.txt`) and tray icon/menu.
+  gitignored `pill_pos.txt`; `Anchor` thread re-centers it under the
+  Claude Code compose box via UI Automation while that app is in front)
+  and tray icon/menu.
 - `config.toml` — all knobs. The app must be restarted to pick up changes.
 - `corrections.txt` — wrong=right word fixes, applied live (no restart).
 - `emphasis_words.txt` — words never collapsed by the stutter-cleanup or

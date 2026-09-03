@@ -3,6 +3,42 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Pill centers on the Claude Code compose box, not the screen
+
+Uriah noticed the pill sat dead-center on screen regardless of where he was
+actually typing, and asked whether it could follow the Claude Code app's
+chat box instead, specifically accounting for that app's own internal
+terminal/file side panel shifting the compose box left without moving or
+resizing the app's own window (so anchoring to the window's bounds alone
+wouldn't have worked). Handed to a Fable agent at max effort to investigate
+feasibility before building anything, since it was a real unknown, not a
+routine change.
+
+Verdict: feasible, and the app's accessibility tree turned out to be well
+authored, not an opaque web surface. Its compose box is a named `Edit`
+element (`name='Prompt'`) with a live bounding rectangle that sits inside
+a chat-column group distinct from the side panel and the splitter between
+them. New `Anchor` thread in ui.py polls `GetForegroundWindow` every
+100ms; when the Claude Code exe is in front, it finds that Edit element
+via UI Automation (`comtypes`, the same library transcribe.py already
+uses for reading focused fields) and publishes its center x, throttled to
+one tree search per second and a cheap rect read every cycle after that.
+`Pill._place()` uses that center when available, falling back to the old
+screen-center behavior for every other app or when UI Automation fails.
+Dragging still works but only moves the pill vertically now; release
+snaps it back to the anchor's x.
+
+Live-verified after the app auto-restarted from a PC reboot (Task
+Scheduler picked up the uncommitted change automatically): the pill
+tracked the compose box, including shifting position when Uriah closed
+the terminal side panel while a recording was held. wisprclone.log shows
+no "UI Automation unavailable" or "anchor read failed" lines. Multi-monitor
+DPI scaling is untested (Claude Code only ran on the primary monitor during
+testing); the compose box's `Prompt` name and the `claude.exe` process
+name are both app-version strings that would need updating if either
+changes upstream, but a mismatch degrades to the old screen-center
+behavior rather than crashing.
+
 ## 2026-09-02 — Start/stop cue reverted: the start clip bled into the mic
 
 Built earlier the same day (Wispr Flow's own dictation-start/stop clips,
