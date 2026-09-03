@@ -14,6 +14,47 @@ what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and prompt;
 hotwords before 2026-09-02).
 
+## 2026-09-03 — Polish replay on the About Me interview's dictations (second confirmation)
+
+Question: does the 9/1 polish-off call (69% no-op, 21% punctuation-only over
+548 real dictations) hold up against a different corpus - the 31 dictations
+from an interview session, longer and more coherent than typical toggle-mode
+use? Same live model (qwen3.5:9b), same `_polish` prompt/options/guards,
+replayed directly rather than read from logs (polish has been off since
+9/1, so no new log pairs exist to mine).
+
+| | |
+|---|---:|
+| dictations in the window | 31 |
+| under min_audio_s=8s, never reach polish live | 4 |
+| sent to the model | 27 |
+| no-op | 24 (89%) |
+| edited and accepted | 3 (11%) |
+| rejected by a guard | 0 |
+| wall clock / mean / median per call | 105.8s / 3.92s / 3.72s |
+
+Higher no-op rate than 9/1's 69%, consistent with these being longer,
+well-formed answers rather than the rambling short commands polish targets.
+Latency ran well past the "~1s per dictation" estimate in config.toml's
+comment - that figure was averaged over short dictations, and the model
+generates its full output regardless of whether anything changes, so cost
+scales with length; this corpus averaged 112 words per answer.
+
+Of the 3 accepted edits: one fixed a stray mid-sentence period into a
+comma, one dropped a filler "I guess" - both correct. The third resolved a
+live self-correction ("most of my childhood, no, all of my childhood") by
+deleting the correction and keeping the wrong value ("most"), inverting
+the intended meaning. None of `_polish`'s four guards (ratio, dropped
+question, dropped profanity, dropped sentence) catch a silent value-swap
+like that - it's the same failure category that got qwen2.5:7b and
+dolphin-mistral rejected earlier, surfacing again in the model that
+replaced them.
+
+Call: stay off. A second, independent sample lands on the same conclusion
+as 9/1 - not enough benefit to justify the latency, and a real chance of a
+silent, guard-invisible meaning change. Data:
+`2026-09-03/interview_polish_replay.py`, `2026-09-03/output.txt`.
+
 ## 2026-09-02 — Chunk-join rule replay
 
 Question: does the join rule proposed in the calibration entry below fix
