@@ -9,7 +9,7 @@ debounce_ms = 300
 
 [audio]
 duck = true           # lower other apps' volume while recording
-duck_factor = 0.05    # they play at 5% while the mic is hot
+duck_factor = 0.01    # they play at 1% while the mic is hot
 idle_close_s = 10     # release the mic (and its tray icon) this many seconds
                       # after the last dictation. 0 = always hot. Briefly
                       # raised to 300 on 2026-08-27 over a clipping-risk
