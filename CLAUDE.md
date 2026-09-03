@@ -184,3 +184,13 @@ a failed polish must never lose a dictation). Always address it as
     search all three docs for the *category* word (guard, model, thread),
     not just the specific new/changed term - an old paragraph enumerating
     siblings won't contain the new one's name for a keyword search to catch.
+  - Reinforced again 2026-09-02, a different failure than the one above:
+    the 2026-09-01 commit that flipped `[polish] enabled = false` pushed
+    with no doc check at all - not too narrow a search, the check simply
+    didn't run. README.md and SETUP.md both kept describing polish as on
+    and running for a full day (at least one more push in between) until
+    an unprompted sweep caught it. The size of a change is not a signal
+    for whether to check: a single boolean flip can make prose elsewhere
+    false as easily as a new feature can. Run the doc-staleness check
+    before every push, unconditionally - never skip it because a change
+    looks too small to matter, and never wait to be asked for it.
