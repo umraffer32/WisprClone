@@ -133,7 +133,7 @@ CreateObject("WScript.Shell").Run """C:\path\to\ollama.exe"" serve", 0, False
 
 Then remove (or rename) Ollama's own Startup shortcut so its tray app doesn't also launch. WisprClone only ever talks to `127.0.0.1:11434`, so it doesn't care which way Ollama is running.
 
-Once more, plainly: `[polish]` is turned on and working for me, but I'm still tuning the prompt and its guardrails as I go. Don't take it as a finished feature.
+Once more, plainly: `[polish]` is currently `enabled = false` for me — off as a trial since 2026-09-01, after a review of 548 real dictations showed it changed nothing in 69% of them and only punctuation in another 14%, not worth the extra second it cost on longer dictations. The model and guardrails above are still exactly as described and still get pulled and configured; flipping `enabled` back to `true` and restarting is all it takes to turn it back on. Don't take any of this as a finished feature either way.
 
 ## Verifying it all works
 

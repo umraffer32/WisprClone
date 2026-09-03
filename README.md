@@ -43,7 +43,7 @@ Nothing shares mutable state without a clear owner: the audio buffer belongs to 
 
 ## Things I tried and reversed
 
-Early versions ran an LLM polish pass over toggle-mode dictation through a local Ollama model, and separately bridged punctuation across consecutive dictations purely on a timer. The first cut of the polish pass got removed entirely, code and Ollama dependency both, once it turned out to add latency for a wording improvement I didn't actually want most of the time. It's back now (see [SETUP.md](SETUP.md) for the how and why), running through a different model with the latency problem actually fixed, though the prompt and its guardrails are still being tuned as I use it day to day. The timer-only bridging got turned off by default early on: it glued together enough unrelated messages in normal chat-style use that the false-positive rate wasn't worth what it fixed. It's back too, now driven by the UI Automation field-read described above instead of a blind timer, with the timer demoted to a fallback for the apps that don't expose readable field text. Both reversals are visible in git history if you want to see the actual back-and-forth.
+Early versions ran an LLM polish pass over toggle-mode dictation through a local Ollama model, and separately bridged punctuation across consecutive dictations purely on a timer. The first cut of the polish pass got removed entirely, code and Ollama dependency both, once it turned out to add latency for a wording improvement I didn't actually want most of the time. It came back (see [SETUP.md](SETUP.md) for the how and why) running through a different model with the latency problem actually fixed, then got switched off again just as deliberately: a review of 548 real polished dictations found it changed nothing in 69% of them and only punctuation in another 14%, so it wasn't earning the extra second it cost on longer dictations. It's off in `config.toml` as a trial, judged by whether raw Whisper's own occasional blemishes, a missing final period, a leftover stammer, actually bother me in day-to-day use; the model and guardrails stay in place either way, and flipping it back on is one config line. The timer-only bridging got turned off by default early on: it glued together enough unrelated messages in normal chat-style use that the false-positive rate wasn't worth what it fixed. It's back too, now driven by the UI Automation field-read described above instead of a blind timer, with the timer demoted to a fallback for the apps that don't expose readable field text. Both reversals are visible in git history if you want to see the actual back-and-forth.
 
 ## Tech stack
 
@@ -53,7 +53,7 @@ Early versions ran an LLM polish pass over toggle-mode dictation through a local
 
 - Model: `large-v3-turbo` on CUDA — [SETUP.md](SETUP.md) has the reasoning behind that choice.
 - Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl tap for toggle mode.
-- Audio ducking on: other apps drop to 5% volume while I'm recording.
+- Audio ducking on: other apps drop to 1% volume while I'm recording.
 - Mic releases after 10 seconds idle so Windows' mic-in-use indicator clears quickly.
 - Repaste offer stays up for 10 seconds before it disappears on its own.
 
