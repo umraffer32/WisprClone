@@ -10,6 +10,16 @@ debounce_ms = 300
 [audio]
 duck = true           # lower other apps' volume while recording
 duck_factor = 0.01    # they play at 1% while the mic is hot
+cue = true            # play a clip when recording starts and stops
+cue_volume = 1.0      # scales the clip; 1.0 is its own level as Wispr Flow
+                      # plays it, lower to soften. Clips are read from
+                      # sounds/ at the repo root - see SETUP.md. The start
+                      # clip's own measured duration (plus a small margin,
+                      # see audio.py's CUE_MUTE_MARGIN_S) mutes that stretch
+                      # of the recorded buffer, so the clip's own sound
+                      # can't bleed into the mic and corrupt the first word
+                      # (see LOG.md/BUGS.md 2026-09-02 for the first attempt
+                      # that didn't do this and the bug it caused)
 idle_close_s = 10     # release the mic (and its tray icon) this many seconds
                       # after the last dictation. 0 = always hot. Briefly
                       # raised to 300 on 2026-08-27 over a clipping-risk

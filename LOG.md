@@ -3,6 +3,50 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-02 — Start/stop cue, second attempt: mute the buffer instead of tuning volume
+
+Second build of the start/stop cue reverted earlier the same day (see the
+two entries below and BUGS.md same date) after it bled the start clip's
+own sound into the mic and turned a dictated "pill" into "pale." That
+build's own writeup had already named the fix it didn't try: mute a known
+window of the recorded buffer while the clip plays, instead of routing
+the sound away from the input path or just tuning volume down. This
+attempt builds that mute.
+
+`audio.py`'s `Recorder` gained `set_start_mute_seconds()`: called once at
+startup with the start clip's own measured duration (`Cue.start_duration_s`,
+read from the WAV header, not guessed), it sets a sample count
+(`mute_samples`) that `_callback()` zeroes out of the buffer starting at
+the rising edge - the same edge that already pulls in the pre-roll and
+pins `_job_mode`. Only the start cue needs this: it plays the instant
+`start_recording()` is called, which is also when real speech might
+begin, where the stop cue plays after speech has already ended and never
+overlaps the buffer at all. A `CUE_MUTE_MARGIN_S` constant (50ms) pads the
+measured clip duration, because `cue.play()` fires from `tick()`'s
+rec-state edge check same as the `Ducker`, not the button-press instant
+itself, so it can lag the real press by up to one 33ms tick, plus a bit
+more for `winsound.PlaySound`'s own async dispatch before sound actually
+reaches the speakers - 3685 samples (230ms) total for the real
+`dictation-start.wav` (180ms clip + 50ms margin). Muting zeroes samples
+in place rather than dropping them, so recording duration/sample count is
+unaffected; a 5ms linear taper at each edge of the window (`_mute_gain()`)
+avoids leaving a hard on/off discontinuity that would itself click if
+this stretch were ever played back. Everything else carries over from the
+first attempt unchanged: winsound temp-file playback (`SND_MEMORY |
+SND_ASYNC` still isn't supported), the `cue`/`cue_volume` knobs, not
+ducked (`PlaySound` goes straight to the default device).
+
+Tested offline (can't launch the real elevated app from here): `Cue`
+built and loaded against the real clips, measuring `dictation-start.wav`
+at 0.1803s; a standalone test drove `Recorder._callback()` with synthetic
+blocks around a `start_recording()` call and confirmed 3685 samples
+muted, buffer sample count unchanged, blocks fully after the window
+untouched byte-for-byte, and the fade edges monotonic and landing near
+1.0/0.0 as designed. Also checked cue-disabled and a mute-window-inside-
+one-block case. Still needs a live check: tray Restart, then a real PTT
+dictation starting the instant the button's pressed, to confirm the
+first word actually comes through clean this time.
+
 ## 2026-09-02 — Pill centers on the Claude Code compose box, not the screen
 
 Uriah noticed the pill sat dead-center on screen regardless of where he was

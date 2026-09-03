@@ -19,7 +19,7 @@ The app is a single process, multi-threaded, no server, no IPC:
 - A **pynput listener thread** watches raw Win32 input events for the configured push-to-talk button or the toggle key.
 - A **PortAudio callback thread** owns the microphone stream and the audio buffer outright; every other thread only flips a boolean to tell it whether to be recording.
 - A **transcriber worker thread** pulls finished recordings off a queue, runs them through faster-whisper, cleans up the text, and pastes it.
-- A **ducker thread** (optional) lowers other apps' volume via pycaw while recording, and restores it after.
+- A **ducker thread** (optional) lowers other apps' volume via pycaw while recording, and restores it after. A short clip also marks the start and stop through winsound, played straight to the default device so it isn't ducked.
 - An **anchor thread** polls UI Automation for the Claude Code compose box while that app is in front and publishes its center x, so the pill sits under the chat column even as the app's side panels open and close. Any other app in front, or a failed read, and the pill keeps its dragged/default center.
 - The **tkinter main thread** drives a 33ms UI tick that reads shared state and redraws the pill, plus the Win32 hook filters that need to run inline to suppress input events.
 
@@ -54,6 +54,7 @@ Early versions ran an LLM polish pass over toggle-mode dictation through a local
 - Model: `large-v3-turbo` on CUDA — [SETUP.md](SETUP.md) has the reasoning behind that choice.
 - Push-to-talk on the mouse's X2 (back) button, with a Right Ctrl tap for toggle mode.
 - Audio ducking on: other apps drop to 1% volume while I'm recording.
+- Start/stop cue on: a short clip marks when recording begins and ends. The recorded buffer mutes for the start clip's own duration so its sound can't bleed into the mic.
 - Mic releases after 10 seconds idle so Windows' mic-in-use indicator clears quickly.
 - Repaste offer stays up for 10 seconds before it disappears on its own.
 

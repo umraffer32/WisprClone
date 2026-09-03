@@ -11,15 +11,44 @@ import collections
 import logging
 import os
 import queue
+import tempfile
 import threading
 import time
+import wave
+import winsound
 
 import numpy as np
 import sounddevice as sd
 
 SAMPLE_RATE = 16000  # what Whisper expects
 
+# How much longer than the start clip's own measured duration to mute the
+# recorded buffer for. cue.play() fires from tick()'s edge check (same one
+# that drives the Ducker), not straight from the button-press instant, so
+# it can lag the real press by up to one 33ms tick; winsound.PlaySound's
+# own async dispatch adds a bit more before sound actually reaches the
+# speakers. 50ms covers both with room to spare.
+CUE_MUTE_MARGIN_S = 0.05
+# Linear taper at each edge of the mute window so zeroing samples doesn't
+# itself leave an audible click if this stretch is ever played back.
+_MUTE_FADE_SAMPLES = round(SAMPLE_RATE * 0.005)  # 5ms
+
 log = logging.getLogger("wisprclone")
+
+
+def _mute_gain(pos, n, total):
+    """Per-sample gain for absolute sample positions [pos, pos+n) within a
+    [0, total) mute window: linear fade down from 1, hard zero, linear fade
+    back up to 1."""
+    idx = np.arange(pos, pos + n)
+    gain = np.zeros(n, dtype=np.float32)
+    fade = min(_MUTE_FADE_SAMPLES, total // 2)
+    if fade:
+        fade_out = idx < fade
+        gain[fade_out] = 1.0 - idx[fade_out] / fade
+        fade_in = idx >= total - fade
+        gain[fade_in] = (idx[fade_in] - (total - fade) + 1) / fade
+    return gain.astype(np.float32)
 
 
 class Ducker(threading.Thread):
@@ -65,6 +94,61 @@ class Ducker(threading.Thread):
                 log.exception("audio ducking failed")
 
 
+class Cue:
+    """Plays Wispr Flow's own start/stop clips (sounds/dictation-start.wav,
+    sounds/dictation-stop.wav - see SETUP.md) through winsound, so there's
+    no per-cue device open (50-300ms on this machine) and no blocking on
+    the caller's thread. Not ducked: PlaySound goes straight to the default
+    output device, bypassing the Ducker.
+
+    winsound refuses SND_MEMORY combined with SND_ASYNC (RuntimeError:
+    "Cannot play asynchronously from memory"), so each clip is volume-scaled
+    once into a temp WAV file and played from there instead."""
+
+    def __init__(self, base_dir, volume):
+        self._start, self.start_duration_s = self._load(
+            base_dir / "sounds" / "dictation-start.wav", volume)
+        self._stop, _ = self._load(
+            base_dir / "sounds" / "dictation-stop.wav", volume)
+
+    @property
+    def ok(self):
+        return self._start is not None and self._stop is not None
+
+    def _load(self, src, volume):
+        if not src.exists():
+            log.warning("cue clip missing, disabling cue: %s", src)
+            return None, None
+        try:
+            with wave.open(str(src), "rb") as r:
+                if r.getsampwidth() != 2:
+                    log.warning("cue clip isn't 16-bit PCM, disabling cue: %s", src)
+                    return None, None
+                channels, rate, nframes = r.getnchannels(), r.getframerate(), r.getnframes()
+                frames = r.readframes(nframes)
+        except Exception:
+            log.exception("cue clip failed to load, disabling cue: %s", src)
+            return None, None
+        samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32) * volume
+        scaled = samples.clip(-32768, 32767).astype(np.int16)
+        path = os.path.join(tempfile.gettempdir(), f"wisprclone_{src.name}")
+        with wave.open(path, "wb") as w:
+            w.setnchannels(channels)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(scaled.tobytes())
+        return path, nframes / rate
+
+    def play(self, starting):
+        path = self._start if starting else self._stop
+        if path is None:
+            return
+        try:
+            winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+        except Exception:
+            log.exception("cue playback failed")
+
+
 class Recorder:
     def __init__(self, cfg, jobs: queue.Queue, status):
         a = cfg["audio"]
@@ -84,6 +168,17 @@ class Recorder:
         self._buffer = []
         self._stream = None
         self.suspended = False
+        self.mute_samples = 0  # start-cue mute window, in samples; 0 = off
+        self._mute_pos = 0  # samples into the current window, once started
+
+    def set_start_mute_seconds(self, clip_seconds):
+        """Called once at startup (after Cue measures its own clip) so the
+        recorded buffer can be muted for exactly as long as the start cue is
+        audibly playing through the speakers, plus a small margin - see
+        CUE_MUTE_MARGIN_S. Only the start cue needs this: it plays the
+        instant recording starts, when real speech might too. The stop cue
+        plays after speech has already ended, nowhere near the buffer."""
+        self.mute_samples = max(0, round((clip_seconds + CUE_MUTE_MARGIN_S) * SAMPLE_RATE))
 
     def _callback(self, indata, frames, t, cb_status):
         block = indata[:, 0].copy()
@@ -96,7 +191,12 @@ class Recorder:
             self._buffer = list(self.preroll)
             self.preroll.clear()
             self._job_mode = self.mode
+            self._mute_pos = 0
         if want:
+            if self.mute_samples and self._mute_pos < self.mute_samples:
+                n = min(len(block), self.mute_samples - self._mute_pos)
+                block[:n] *= _mute_gain(self._mute_pos, n, self.mute_samples)
+                self._mute_pos += n
             self._buffer.append(block)
         else:
             if self._was_recording:
@@ -198,7 +298,6 @@ if __name__ == "__main__":
     # Self-test: record 3 seconds to test.wav with a live level meter.
     import sys
     import tomllib
-    import wave
 
     with open("config.toml", "rb") as f:
         cfg = tomllib.load(f)
