@@ -41,39 +41,24 @@ onboarding work unless explicitly asked.
   timing lines (`job: audio=… whisper=… polish=… mode=… polish_status=…
   paste=…`) plus raw/out diffs whenever polish or clean_text changes text.
 - `vad_shadow.log` — one JSON line per dictation with the Silero segment
-  bounds a streaming implementation would have used (300/400/500/700/1000ms
-  candidates). Gitignored via `*.log`. Real streaming is shelved (see
-  LOG.md 2026-08-27) - corrected felt-latency numbers showed a ~0.14s
-  median win, not worth the build. Left running rather than torn out in
-  case 60s+ dictations become common enough to reopen the question.
+  bounds a streaming implementation would have used. Gitignored via `*.log`.
+  Real streaming is shelved (LOG.md 2026-08-27) — the felt-latency win
+  wasn't worth the build. Left running in case that changes.
 - `retained_audio/` — real dictation audio, capped and auto-pruned
-  (`[retain]` in config.toml), collected for the now-shelved streaming
-  merge-rule decision. Gitignored; see that section's comment for how to
-  clear it out if it's not worth keeping around unused.
+  (`[retain]` in config.toml), collected for the shelved streaming
+  merge-rule decision. Gitignored; see that config section for how to
+  clear it out if it's not worth keeping unused.
 - `analysis_tools/` — `mine_vocab.py` / `mine_streaming.py` /
   `mine_merge_rule.py` / `mine_polish.py` / `mine_polish_3b.py` /
   `mine_segment_polish.py` / `mine_ollama_parallel.py`: offline analysis
-  scripts over the logs above, moved into their own directory 2026-08-29 to
-  separate them from the app itself. Each still finds the repo root's
-  `wisprclone.log`/`config.toml`/etc. via `BASE = Path(__file__).parent.parent`,
-  and the three that import `transcribe.py` add the repo root to `sys.path`
-  first, since it no longer sits next to them. Personal vocabulary → the Whisper
-  prompt, the streaming pause-threshold
-  pick, the merge-rule simulation, a polish-quality/filler audit, the same
-  audit replayed through a smaller polish model to judge a downsize (see
-  LOG.md 2026-08-28), whether polishing pause-split transcript pieces in
-  isolation matches whole-transcript polish (settled no for
-  segment-parallel polish - see LOG.md), and Ollama's real request
-  concurrency on this machine (serializes - `OLLAMA_NUM_PARALLEL:1`). Run
-  by hand, summary output only.
-- `analysis_tools/results/` — `README.md` is the analysis log: one entry per
-  offline test (newest first, LOG.md's shape) with the full tables and the
-  call, where LOG.md keeps only the decision. New test results get logged
-  there. Each dated subfolder holds that day's data (reference transcripts
-  of every retained clip per model, polish replay inputs and outputs,
-  reports) and the scripts that made them, all gitignored since the data
-  quotes dictations. A future candidate model only needs its own pass
-  against the saved baselines. First set 2026-09-01.
+  scripts over the logs above, run by hand, summary output only. Each
+  finds the repo root's `wisprclone.log`/`config.toml` via
+  `BASE = Path(__file__).parent.parent`; the three that import
+  `transcribe.py` add the repo root to `sys.path` first.
+- `analysis_tools/results/` — `README.md` is the analysis log: one entry
+  per offline test (newest first) with the full tables, where LOG.md keeps
+  only the decision. Each dated subfolder holds that day's data and
+  scripts, gitignored since the data quotes dictations.
 
 ## Launching and restarting — read before touching a running instance
 
@@ -100,97 +85,52 @@ a failed polish must never lose a dictation). Always address it as
 
 ## Conventions
 
-- Append an entry to LOG.md with any meaningful commit: what changed and why,
-  including testing results and reversals. Decision-level, not diff narration.
-- A bug or incident gets an entry in BUGS.md, whether or not it produced a
-  commit. LOG.md is commit-keyed and only covers changes; BUGS.md is the
-  failure history, including things diagnosed with no code fix (a driver
-  update crashing the app, say). Added 2026-08-29, backfilled from all of
-  LOG.md's history via two independent Fable passes (one drafts, one audits
-  the draft against LOG.md and git history fresh) - keep using both passes
-  for any future large rewrite of either file.
-- Keep commit messages short: one imperative line by default, or up to a
-  couple one-sentence bullets if a commit genuinely bundles multiple
-  changes. Never a paragraph-plus-sub-bullets per file - that detail goes
-  in LOG.md, not the commit body. Reinforced 2026-08-26 after drifting into
-  exactly that on three same-day commits.
-- Commit a code change only after Uriah has confirmed it works live (tray
-  Restart, a real dictation), not right away once it passes offline checks
-  (syntax, tomllib load, a standalone script). Decided 2026-09-02 after the
-  start/stop cue was committed immediately, then turned out to bleed into
-  the mic and needed a revert plus LOG.md/BUGS.md entries to undo - work
-  that a change never committed wouldn't have needed. Local commits still
-  happen promptly once confirmed (an atomic, cleanly revertible unit beats
-  leaving it uncommitted while later edits pile on top - this environment
-  has no interactive git to un-tangle a mixed uncommitted diff). Pushing
-  was never the issue; that already only happens on request.
+- LOG.md gets an entry for any meaningful commit: what changed and why,
+  including testing and reversals. Decision-level, not diff narration.
+- BUGS.md gets an entry for any bug or incident, whether or not it produced
+  a commit — including things diagnosed with no code fix. LOG.md is
+  commit-keyed and covers changes only; BUGS.md is the failure history.
+  Any future large rewrite of either file: two independent passes (one
+  drafts, one audits fresh against history), not one.
+- Commit messages: one imperative line by default, a couple one-sentence
+  bullets if a commit bundles multiple changes — never a paragraph or
+  sub-bullets per file. That detail belongs in LOG.md.
+- Commit a code change only after it's confirmed working live (tray
+  Restart, a real dictation), not right after it passes offline checks
+  alone. Once confirmed, commit promptly anyway — don't leave it
+  uncommitted while later edits pile on top (this environment has no
+  interactive git to untangle a mixed diff afterward). Pushing is separate
+  and only happens on request.
 - Config knobs belong in config.toml; internal sanity thresholds stay in code.
-- clean_text() regexes are one-quirk-per-pattern; check the polish pass before
-  adding another.
-- Writing or modifying code in this repo goes to an agent dispatched in an
-  isolated git worktree (`isolation: "worktree"`), not written directly in
-  the main chat - except a genuinely trivial change (a handful of constants,
-  a one-line config value, a comment fix) with no logic to get wrong, which
-  the main chat can just edit directly. Noted 2026-09-02 after a pill-resize
-  dispatch (four constants in ui.py) that didn't need the overhead. Anything
-  that involves actual logic, more than a couple of lines, or any real
-  chance of a wrong call still goes through the isolated agent. Main chat
-  still scopes the work, reviews the result, and handles git either way.
-  Which model gets a dispatched job is the main chat's call (decided
-  2026-09-02): Sonnet or Opus for anything small or well-specified, Fable
-  only for the genuinely hard changes - subtle concurrency, a design that
-  needs pressure-testing, a bug that resisted a first pass. From 2026-08-26
-  to 2026-09-02 every code change went to Fable regardless of size, after it
-  outperformed on the SleepWatcher diagnosis and a code-plan critique; that
-  burned usage on trivial edits. When Fable is the pick, dispatch at max
-  effort - there's no effort parameter on the Agent tool itself, so this
-  means explicitly telling the agent in its prompt to work at maximum
-  reasoning depth, not the default pass. Also pair every
-  such dispatch with a ~60s Monitor heartbeat that digests real progress
-  (files touched, commands run, the agent's last note-to-self - never raw
-  transcript dumped verbatim) and relay each one as 2-3 plain sentences of
-  what it's actually doing, not just "still working." Stop the heartbeat
-  the moment the real completion notice arrives.
-- Offline measurement runs (model bake-offs, replays, environment setup,
-  looping files through a model) go to a Sonnet agent, not Fable: the work
-  is mechanical and Sonnet did the whole Canary-Qwen run on 2026-09-02 for
-  ~3% of a usage window, where Fable at max effort on the polish bake-off
-  the day before burned through the limit. The agent appends one plain
-  sentence per milestone to a progress file; the main chat runs a Monitor
-  on it and reads each line against what should be true at that point
-  (this caught NeMo swapping the CUDA torch for a CPU wheel). Fable stays
-  for app code changes and for judgment-heavy reads such as blind
-  side-by-side quality calls; the main chat can do the read itself from
-  saved JSON when it's small. Tell agents not to wake on every progress
-  milestone, only on a pass finishing or failing.
-- Before pushing any commit, check whether it makes a doc stale - CLAUDE.md,
-  README.md, SETUP.md, or a comment elsewhere - and fix it in the same push,
-  not a later cleanup pass. Decided 2026-08-26 after a repo-wide review
-  found 8 real doc/code mismatches that had accumulated over one day's
-  commits (a new script missing from CLAUDE.md's Files list, a stale model
-  name in SETUP.md, a README claim a later commit made false, etc.). The
-  goal is that docs are never something Uriah has to separately worry about
-  or schedule an audit for - consistency is a property of every push, not a
-  periodic cleanup task.
-  - Reinforced 2026-08-27: a commit adding a 4th `_polish()` guard checked
-    CLAUDE.md and searched for that commit's own keywords, but missed a
-    SETUP.md paragraph written days earlier that named the other three
-    guards by name - the search never looked for "guard" as a category,
-    only for terms specific to the new one. Grepping a commit's own diff
-    for its own vocabulary isn't enough when a claim living somewhere else
-    enumerates the same thing without ever mentioning the new addition by
-    name. When a change adds to, removes from, or changes a set something
-    is already true of (guards, models, config knobs, threads, files),
-    search all three docs for the *category* word (guard, model, thread),
-    not just the specific new/changed term - an old paragraph enumerating
-    siblings won't contain the new one's name for a keyword search to catch.
-  - Reinforced again 2026-09-02, a different failure than the one above:
-    the 2026-09-01 commit that flipped `[polish] enabled = false` pushed
-    with no doc check at all - not too narrow a search, the check simply
-    didn't run. README.md and SETUP.md both kept describing polish as on
-    and running for a full day (at least one more push in between) until
-    an unprompted sweep caught it. The size of a change is not a signal
-    for whether to check: a single boolean flip can make prose elsewhere
-    false as easily as a new feature can. Run the doc-staleness check
-    before every push, unconditionally - never skip it because a change
-    looks too small to matter, and never wait to be asked for it.
+- clean_text() regexes are one-quirk-per-pattern; check the polish pass
+  before adding another.
+- Docs (CLAUDE.md, README.md, SETUP.md) must stay consistent with the code
+  on every push — check before pushing, fix in the same commit, never a
+  later cleanup pass. This has failed twice: once by searching a commit's
+  own vocabulary instead of the *category* it belongs to (search "guard,"
+  "model," "thread," not just the new term — an old paragraph enumerating
+  siblings won't name the new one); once by skipping the check entirely
+  because a one-line config flip didn't look big enough to matter. Size is
+  not a valid signal — run this unconditionally, on every push, unasked.
+
+## Agent dispatch
+
+- Code changes go to a worktree-isolated agent (`isolation: "worktree"`)
+  by default, not written directly in main chat. Exception: a genuinely
+  trivial edit (a handful of constants, one config value, a comment fix)
+  with no real logic to get wrong — main chat edits that directly. Main
+  chat always scopes the work, reviews the result, and handles git.
+- Model choice is main chat's call: Sonnet or Opus for anything small or
+  well-specified; Fable only for genuinely hard problems — subtle
+  concurrency, a design worth pressure-testing, a bug that resisted a
+  first pass. Not a default: an earlier "everything goes to Fable" rule
+  burned usage on trivial edits and was dropped.
+- Offline/mechanical runs (bake-offs, replays, environment setup) go to a
+  Sonnet agent with a progress file, not Fable — cheaper and just as
+  reliable for mechanical work. Fable stays for real app code and
+  judgment-heavy reads (blind quality comparisons).
+- Dispatching Fable: state "maximum reasoning depth" explicitly in the
+  prompt — the Agent tool has no effort parameter of its own.
+- Every dispatch: pair with a ~60s Monitor heartbeat, relayed as 2-3 plain
+  sentences of real progress (never "still working"), stopped the moment
+  the real completion notice arrives.
