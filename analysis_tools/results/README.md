@@ -14,6 +14,77 @@ what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and prompt;
 hotwords before 2026-09-02).
 
+## 2026-09-04 — Canary-1B vs large-v3-turbo
+
+1274 clips (turbo's current full corpus; the retained corpus itself grew to
+1283 mid-run, 9 with no baseline). NVIDIA's plain Canary-1B, a NeMo
+`EncDecMultiTaskModel` (attention encoder-decoder, no LLM decoder) - not
+`canary-qwen-2.5b`, already rejected for its Qwen decoder normalizing
+speech into clean written text. API confirmed from the installed NeMo
+3.0.0 source itself (`transcribe()`'s own docstring names the exact call
+used here the "legacy Canary-1B API"), English ASR with `pnc="yes"`. Sonnet
+agent, main chat supervising, no nested sub-agent or monitor. Call: stays
+on turbo, same as every candidate before it, but for a different mix of
+reasons than the Qwen-decoder models - this one gets casing and
+punctuation right without a normalization problem, and still loses on
+digits, the hotword, latency, and a long-clip content-drop that's worse
+here than anywhere else tested.
+
+| | turbo | Canary-1B |
+|---|---:|---:|
+| word disagreement (of 28,928 turbo words) | | 7.5% |
+| clips identical after lowercasing/stripping punctuation | | 61% |
+| wall median | 0.24s | 1.25s |
+| wall p95 | 0.48s | 5.41s |
+| fit, per audio second | 0.011s | 0.153s |
+| whole pass | 350s | 2336s |
+| slower on | | 1274 of 1274 clips |
+| clips with any capital letter | 1273 of 1274 | 1273 of 1274 |
+| clips with . ! or ? | 1258 of 1274 | 1261 of 1274 |
+| clips returned empty | 0 | 0 |
+| turbo has a digit, Canary loses it | | 141 of 141 digit-bearing clips |
+| clips with um/uh | 6 | 10 |
+| clips with "you know" | 59 | 73 |
+| wrote WisprClone for the hotword | 19 of 19 | 0 of 19 |
+| GPU memory | | ~7.9-8.0 GB |
+
+Disagreement by length: 5.4% under 10s, 4.9% at 10 to 30s, 16.5% over 30s -
+the same long-clip spike every candidate with an autoregressive decoder has
+shown, and the worst version of it yet. Casing and punctuation are the one
+real point in this model's favor over every other non-Whisper candidate:
+no normalization defect, capitals and terminal punctuation land at
+essentially turbo's own rate, because there's no LLM decoder here to
+flatten the text the way Canary-Qwen's, ARK's, and Granite 3.3's did.
+Everything else repeats or worsens the pattern. Digits are not just
+sometimes lost, every single one of 141 digit-bearing clips came back with
+the number spelled out ("4060 Ti" to "four thousand and sixty Ti", "5090"
+to "fifty ninety", "2026" to "twenty twenty six", "95%" to "ninety five
+percent") - a complete loss where Granite 4.1 only lost 7 of 144. The
+WisprClone hotword failed all 19 times it came up, always "Whisper Clone"
+or "WhisperClone", the same rewrite as every prior candidate. "Alright" to
+"all right" was the single most common diff (47 clips), well above what
+any earlier round showed.
+
+Long-clip content-dropping, checked directly before the full pass and
+confirmed at scale after it: every one of the 11 retained clips over 60s
+lost a real chunk of the transcript, not just the longest one. Word-count
+ratios (Canary words / turbo words) ran 0.61 to 0.85 across all 11, three
+of them under 0.65 - a whole sentence or two silently missing from the
+middle of the clip, occasionally bridged by repeating an earlier sentence
+verbatim rather than admitting the gap. Canary-Qwen's round found this on
+one 76s clip; here it's the rule, not the exception, for anything past a
+minute. One clip surfaced a separate reliability problem worth flagging on
+its own: a 23-second clip where turbo (correctly) heard only "thank you"
+came back from Canary as roughly 130 repeated "four"/"five" tokens - a
+runaway hallucination on a mostly-silent clip, the kind of failure
+Whisper's own no-speech-probability guard exists to catch and Canary has
+no equivalent for. Fillers were kept and slightly over-produced rather than
+dropped (um/uh 10 vs turbo's 6, "you know" 73 vs 59, some of them inserted
+into passages turbo transcribed without one). Profanity survived close to
+turbo's own counts (fuck 34/37, shit 28/27, damn 7/8). Setup notes in
+canary1b_install_notes.md; data in
+`analysis_tools/results/2026-09-04/canary1b_*` (gitignored).
+
 ## 2026-09-04 — ARK-ASR-3B vs large-v3-turbo (smoke test only)
 
 23 clips (same smoke-test set as the Moonshine round, including its 3

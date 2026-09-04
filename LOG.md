@@ -3,6 +3,42 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-04 — Canary-1B bake-off: rejected, but breaks part of the pattern
+
+Fourth bake-off the same day. Plain `nvidia/canary-1b` (NeMo
+`EncDecMultiTaskModel`, an attention encoder-decoder with no LLM decoder
+stage) rather than `canary-qwen-2.5b`, already rejected specifically for
+letting its Qwen decoder normalize speech into clean written text instead
+of transcribing it. Full 1274-clip pass, not a smoke test - the earlier
+long-clip check on the 3 longest retained clips found real content missing
+before the pass even started, so it ran to get real corpus-wide numbers
+rather than stopping early.
+
+Casing and punctuation came back clean: capitals and terminal punctuation
+landed at essentially turbo's own rate, with no normalization defect at
+all. That's a first for a non-Whisper candidate and confirms the theory -
+no Qwen decoder means no Qwen-decoder rewrite. Everything else held the
+pattern or made it worse. Every one of 141 digit-bearing clips lost its
+digits entirely (not a partial miss like Granite 4.1's 7 of 144, a
+complete one), the WisprClone hotword failed all 19 times it came up
+(always "Whisper Clone"), and latency ran 5x turbo at the median and 11x
+at p95. Long-clip content-dropping was worse than any prior candidate:
+every one of 11 clips over 60s lost 15 to 39% of its words from the middle
+of the transcript, not just the single 76s outlier Canary-Qwen dropped
+half of. One 23-second near-silent clip triggered a runaway hallucination,
+roughly 130 repeated "four"/"five" tokens where turbo correctly heard just
+"thank you" - a reliability failure with no equivalent to Whisper's
+no-speech-probability guard to catch it. Stays on turbo.
+
+Eight candidates now tested (Parakeet, Canary-Qwen, Granite 3.3, Granite
+4.1, large-v3, Moonshine, ARK-ASR-3B, Canary-1B). The casing/punctuation
+half of the pattern broke for the first time - a non-LLM-decoder
+architecture really does avoid that specific defect - but the rest of it
+held: no candidate yet gets the hotword right, none preserve digits
+reliably, and every one costs several times turbo's latency. Tables in
+analysis_tools/results/README.md; data in
+analysis_tools/results/2026-09-04/ (gitignored).
+
 ## 2026-09-04 — ARK-ASR-3B smoke test: rejected, current leaderboard #1 by WER
 
 Third bake-off the same day, curiosity-driven (Uriah: "I want to test as
