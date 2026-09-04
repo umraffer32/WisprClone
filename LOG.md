@@ -3,6 +3,53 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-04 — Granite Speech 4.1 2B bake-off: stays on turbo
+
+Curiosity-driven, not a specific complaint about turbo. A web search for
+what's shipped since the 9/2 round of bake-offs turned up Granite Speech
+4.1 2B, IBM's follow-up to the 3.3 2B rejected that day for emitting
+all-lowercase, unpunctuated text - 4.1's release notes claim a fix
+("punctuation and truecasing... with a simple prompt change"), a specific
+reason to retest rather than just a new leaderboard number.
+
+Sonnet agent, same method as the 3.3/Canary/Parakeet rounds, run against
+the full current 1,272-clip retained_audio corpus (up from 886-990 in the
+prior rounds) with a fresh turbo baseline generated under the current
+Whisper prompt rather than reusing the stale 9/1 one. The fix is real:
+switching to the model card's documented punctuation-prompt row (3.3's
+basic-ASR prompt still returns normalized text on 4.1 too) produces real
+sentence case and punctuation on 99%+ of clips, up from 0% on 3.3. Word
+accuracy also improved to 2.9% disagreement, the best of any non-Whisper
+candidate tested. But the pattern that killed every prior candidate held
+anyway: 0 of 19 correct on the WisprClone hotword (always "Whisper Clone,"
+two words), digits still written as words, and latency about 5x turbo's
+median, over 11x at p95. Stays on turbo. Four non-Whisper candidates now
+tested against this corpus (Parakeet, Canary-Qwen, Granite 3.3, Granite
+4.1) plus large-v3 itself, all rejected on some flavor of the same gap:
+leaderboard WER doesn't predict hotword/digit/latency fit. Tables in
+analysis_tools/results/README.md; data and scripts in
+analysis_tools/results/2026-09-04/ (gitignored).
+
+## 2026-09-04 — Polish trial closed out in README; a stale 21%->14% figure fixed
+
+README's "Things I tried and reversed" no longer leaves the polish trial
+open-ended - closed out with the three-way explanation (the rewritten
+Whisper prompt, corrections.txt, and clean_text()'s regex layer) for what
+replaced it without polish's latency or meaning-inversion risk. Also fixed
+config.toml's `[polish]` comment and the 2026-09-03 results entry below,
+which both misquoted the 548-dictation study's punctuation-only share as
+21% instead of the source table's 14%.
+
+## 2026-09-03 — Second confirmation polish should stay off: interview dictations replayed offline
+
+Offline replay of the 9b (`_polish`'s real prompt/options/guards) against
+27 dictations from an unrelated session (building an About Me file) - 89%
+no-op, only 3 edits accepted, one of which inverted a live self-correction's
+actual meaning ("most of my childhood, no, all of my childhood" -> "most of
+my childhood", the wrong value kept) with none of the four guards catching
+it. A second independent sample landing on the same call as the 9/1
+decision. Tables in analysis_tools/results/README.md.
+
 ## 2026-09-02 — Start/stop cue, second attempt: mute the buffer instead of tuning volume
 
 Second build of the start/stop cue reverted earlier the same day (see the

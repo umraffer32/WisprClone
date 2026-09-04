@@ -14,6 +14,50 @@ what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and prompt;
 hotwords before 2026-09-02).
 
+## 2026-09-04 — Granite Speech 4.1 2B vs large-v3-turbo
+
+1272 clips (turbo baseline extended to 1273, the full current corpus; one
+new dictation landed mid-run). Same method and stack as the 3.3 round
+(plain transformers, scratch venv, Sonnet agent, main chat supervising).
+Call: stay on turbo. IBM's claimed fix for 3.3's normalized-text defect is
+real - the model card's "ASR with punctuation" prompt row (not 3.3's
+basic-ASR prompt, which still returns normalized text on 4.1 too) produces
+genuine sentence case and punctuation - but the rest of the pattern from
+every prior non-Whisper candidate holds: never gets the WisprClone hotword
+right, still writes digits as words, and costs about 5x turbo's latency at
+the median.
+
+| | turbo | Granite 4.1 2B |
+|---|---:|---:|
+| word disagreement (of 28,909 turbo words) | | 2.9% |
+| clips identical after lowercasing/stripping punctuation | | 70% |
+| wall median | 0.24s | 1.22s |
+| wall p95 | 0.48s | 5.36s |
+| fit, per audio second | 0.011s | 0.18s |
+| whole pass | 350s | 2346s |
+| slower on | | 1270 of 1272 clips |
+| clips with any capital letter | | 1263 of 1272 (99.3%) |
+| clips with . ! or ? | | 1213 of 1272 (95.4%) |
+| clips returned empty | 0 | 1 (a 4.6s "Thank you." clip) |
+| turbo has a digit, Granite loses it | | 7 of 144 digit clips |
+| clips with um/uh | 6 | 7 |
+| clips with "you know" | 59 | 67 |
+| wrote WisprClone for the hotword | 19 of 19 | 0 of 19 |
+| GPU memory | | ~4.5-4.7 GB |
+
+Disagreement by length: 3.5% under 10s, 2.7% at 10-30s, 2.0% over 30s - best
+of every non-Whisper candidate tested so far, and the length curve runs the
+opposite direction from 3.3's (which spiked over 30s from one catastrophic
+empty result). "Claude" repeatedly heard as "Cloud"/"Clod" (including
+"CLAUDE code" -> "Clod Code" in a dictation turbo got right), "grok" ->
+"grock", one 2s clip hallucinated a Spanish sentence where turbo returned
+nothing. Numbers as words throughout ("ten am", "eight hundred or nine
+hundred", "Fable 5" -> "Fable V"). Profanity preserved close to turbo (fuck
+33/37, shit 27/27, damn 7/8). Setup notes in granite41_install_notes.md;
+the model card's prompt table is the whole story here - 3.3's basic-ASR
+prompt still returns normalized text on 4.1, the punctuation-specific
+prompt row is what actually fixes it.
+
 ## 2026-09-03 — Polish replay on the About Me interview's dictations (second confirmation)
 
 Question: does the 9/1 polish-off call (69% no-op, 14% punctuation-only over
