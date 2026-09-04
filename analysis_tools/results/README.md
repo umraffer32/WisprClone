@@ -14,6 +14,45 @@ what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and prompt;
 hotwords before 2026-09-02).
 
+## 2026-09-04 — ARK-ASR-3B vs large-v3-turbo (smoke test only)
+
+23 clips (same smoke-test set as the Moonshine round, including its 3
+digit-bearing and 3 WisprClone-hotword clips), not a full pass - the
+digit/hotword/casing pattern was unambiguous by the smoke test, matching
+what stopped the Granite 3.3 and Moonshine rounds early. `Audio8/ARK-ASR-3B`
+(current #1 on the Open ASR Leaderboard, 5.04% WER): Whisper-style encoder
++ MLP adapter + Qwen decoder via custom `arkasr` remote code
+(`trust_remote_code=True`), same architecture family as Canary-Qwen 2.5B.
+Sonnet agent, main chat supervising, no nested sub-agent or monitor. Call:
+reject - repeats Canary-Qwen's pattern and is worse on casing than any
+prior candidate including Granite 3.3.
+
+| | turbo | ARK-ASR-3B |
+|---|---:|---:|
+| word disagreement (of 465 turbo words, smoke sample) | | 11.0% |
+| digit-bearing clips that kept the digit | | 0 of 4 |
+| wrote WisprClone for the hotword | 3 of 3 | 0 of 3 |
+| clips with any capital letter | | 1 of 23 |
+| clips with . ! or ? | | 22 of 23 |
+| wall (smoke sample total) | | ~4.9x turbo |
+| wall ratio past 15s clips | | 6-7.4x turbo |
+| GPU memory | | ~7.5-7.6 GB |
+
+Digits: "4060 Ti" -> "forty sixty t i" (three separate clips), "10 p.m."
+-> "ten p. m.", "10 year old" -> "ten year old" - spelled out every time,
+no exceptions. Casing is the standout failure: 22 of 23 clips came back
+with zero capital letters anywhere, not sentence starts, not proper nouns
+("nvidia", "claude", "afghanistan" all lowercase) - worse than Granite
+3.3's own all-lowercase result, since 3.3 at least had no punctuation
+either and this one half-looks paste-ready with periods and question marks
+sitting in an otherwise uncapitalized sentence. One 37.3s clip (past the
+model's 30s encoder window) transcribed cleanly with no truncation -
+long-clip handling was not the problem here. Model card names
+`Audio8/ARK-ASR-3B` but its own example code uses `AutoArk-AI/ARK-ASR-3B`
+(byte-identical config.json on both); needed `librosa` beyond the model
+card's stated deps. Setup notes in ark_install_notes.md. Data: smoke-test
+only, `analysis_tools/results/2026-09-04/ark_*`.
+
 ## 2026-09-04 — Moonshine Base vs large-v3-turbo (smoke test only)
 
 23 clips (18 duration-spread 0.7s-24.2s, 5 targeted digit/hotword clips),

@@ -3,6 +3,34 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-04 — ARK-ASR-3B smoke test: rejected, current leaderboard #1 by WER
+
+Third bake-off the same day, curiosity-driven (Uriah: "I want to test as
+many of these damn models as I can"). Audio8/ARK-ASR-3B is the current #1
+on the Open ASR Leaderboard (5.04% WER), but its architecture - a
+Whisper-style encoder feeding a Qwen decoder - is the same family as
+Canary-Qwen 2.5B, already rejected for letting its LLM decoder normalize
+speech into clean written text instead of transcribing it literally.
+Dispatched with the digit/hotword question stated as the crux to test for
+up front, not an afterthought.
+
+The prior held, worse than expected. 0 of 4 digit-bearing smoke clips kept
+their digits ("4060 Ti" -> "forty sixty t i", three separate times). 0 of
+3 WisprClone-hotword clips correct, same "whisper clone" rewrite as every
+other candidate. Casing came back worse than any prior candidate,
+including Granite 3.3: 22 of 23 clips had zero capital letters anywhere,
+not sentence starts, not proper nouns. Word disagreement 11.0%, worse than
+Canary-Qwen's own 5.0% despite the better leaderboard rank. Latency ~4.9x
+turbo overall, 6-7.4x on clips past 15s. Stopped at the smoke test - the
+pattern was unambiguous, no full pass run. Rejected.
+
+Seven candidates now tested against this corpus (Parakeet, Canary-Qwen,
+Granite 3.3, Granite 4.1, large-v3, Moonshine, ARK-ASR-3B). The leaderboard
+rank and real fit for this app are about as uncorrelated as they've ever
+looked: the current #1 model by WER is also the worst performer tested on
+every axis that matters here. Tables in analysis_tools/results/README.md;
+data in analysis_tools/results/2026-09-04/ (gitignored).
+
 ## 2026-09-04 — Moonshine v2 (Base) smoke test: rejected on latency, not accuracy
 
 Same day as the Granite 4.1 round, tested Moonshine (Useful Sensors), which
