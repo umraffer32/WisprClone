@@ -7,6 +7,29 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-04 — Dispatched agent left a worktree and monitor running past completion
+
+Symptom: during the Granite Speech 4.1 2B bake-off, the dispatched agent
+reported "completed" but a background heartbeat monitor it had set up (on
+top of a worktree-isolated sub-agent it nested without being asked) kept
+polling for over an hour afterward, holding a file lock on the worktree
+directory. Uriah noticed and had to ask for it to be cleaned up. Root
+cause: the dispatch prompt asked for a self-contained report but didn't
+forbid the agent from spinning up its own infrastructure (nested
+sub-agent, its own Monitor) to watch its own work - nothing checks that
+such infrastructure tears down when the task reports done, only that the
+requested work itself finished. Investigating turned up 5 more stray
+worktree branches accumulated across the project's history the same way,
+never cleaned up (all fully merged, no unique work lost). Fix: `TaskStop`
+on the lingering agent, `git worktree remove` plus `git branch -D` on all
+6 stray branches (verified each was a `batched` ancestor first). Process
+fix: the next dispatch (the Moonshine bake-off, same day) was explicitly
+told to do the work directly with no nested agent and no self-managed
+monitor, and finished clean. Standing habit going forward: verify
+`git worktree list` / `git branch -a` / `ListAgents` after every
+worktree-isolated dispatch instead of waiting to be asked. Status: fixed
+for this incident, process change in place to catch it earlier next time.
+
 ## 2026-09-02 — Start cue clip bled into the mic and corrupted the first word
 
 Symptom: dictated "pill" pasted as "pale" right after pressing the PTT

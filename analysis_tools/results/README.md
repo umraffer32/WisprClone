@@ -14,6 +14,45 @@ what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and prompt;
 hotwords before 2026-09-02).
 
+## 2026-09-04 — Moonshine Base vs large-v3-turbo (smoke test only)
+
+23 clips (18 duration-spread 0.7s-24.2s, 5 targeted digit/hotword clips),
+not a full pass - stopped at the smoke test once the latency numbers
+answered the question the model was being tested for. Plain transformers
+stack (`MoonshineForConditionalGeneration` + `AutoProcessor`, no
+prompt/hotword mechanism at all - a "v2 streaming" line exists under a
+renamed org but needs transformers built from git, not stable enough to
+test). Sonnet agent, main chat supervising, no nested sub-agent or monitor
+this round. Call: reject - not on accuracy, on the one thing it was being
+tested for.
+
+Casing, punctuation, and digits all pass clean for the first time of any
+non-Whisper candidate: 22 of 23 clips got real capitals and sentence
+punctuation (vs Granite 3.3's 0 of 990), and all 3 of turbo's digit-bearing
+smoke clips ("4060 Ti", "10 year old") kept their digits. The hotword still
+fails the same way as every prior candidate: 0 of 3 WisprClone clips
+correct, always "Whisper Clone"/"WhisperClone" - Moonshine has no
+hotword-biasing input to fix this with.
+
+| | turbo | Moonshine Base |
+|---|---:|---:|
+| word disagreement (of 486 turbo words, smoke sample) | | 5.6% |
+| wall median (smoke sample) | 0.232s | 0.316s |
+| fit, fixed overhead | 0.169s | 0.093s |
+| fit, per audio second | 0.0115s | 0.0475s |
+| crossover point | | ~2.1s of audio |
+| projected full-corpus wall time (1274 clips) | ~349s | ~671s (1.9x) |
+| clips with any capital letter | | 22 of 23 |
+| clips with . ! or ? | | 22 of 23 |
+| wrote WisprClone for the hotword | 3 of 3 | 0 of 3 |
+
+Moonshine's near-zero fixed overhead beats turbo below about 2 seconds of
+audio, then loses steadily worse as clips get longer - 1.1x at 2.4s, 1.8 to
+2x by 10-15s, 3.5x on a 24s clip. The corpus median is 5.7s and 906 of
+1274 clips run 10s or longer, so the real-use average sits well past the
+crossover. Setup notes in moonshine_install_notes.md. Data: smoke-test
+only, `analysis_tools/results/2026-09-04/moonshine_*`.
+
 ## 2026-09-04 — Granite Speech 4.1 2B vs large-v3-turbo
 
 1272 clips (turbo baseline extended to 1273, the full current corpus; one

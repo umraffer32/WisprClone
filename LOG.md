@@ -3,6 +3,37 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-04 — Moonshine v2 (Base) smoke test: rejected on latency, not accuracy
+
+Same day as the Granite 4.1 round, tested Moonshine (Useful Sensors), which
+markets itself on latency rather than leaderboard WER - the real question
+wasn't whether it hears well, it was whether it's actually faster than the
+already-optimized turbo path. Dispatched with an explicit instruction not
+to nest a sub-agent or set up its own monitor this time, after the Granite
+4.1 round left one running for an hour past completion (see the entry
+below and BUGS.md same date).
+
+Smoke test (23 clips, duration-spread plus targeted digit/hotword clips)
+cleared the accuracy bar every non-Whisper candidate before it had failed:
+real sentence case and punctuation on 22 of 23 clips (Granite 3.3 managed
+0 of 990), and it kept digits as digits where every other candidate wrote
+them as words. Still fails the WisprClone hotword the same way as
+everyone else (0 of 3), and Moonshine has no hotword-biasing mechanism at
+all to fix that with.
+
+What actually killed it was the thing being tested. turbo's near-fixed
+~0.17s overhead beats Moonshine's steeper per-second cost past about 2
+seconds of audio, and the corpus median dictation is 5.7s. Projected
+across all 1,274 real clips, turbo finishes the whole set in about 349s
+to Moonshine's 671s - roughly 1.9x slower overall, worse on longer clips
+(3.5x on a 24s clip). Stopped at the smoke test rather than running a full
+pass on a question the fit already answered. Rejected. Six candidates now
+tested (Parakeet, Canary-Qwen, Granite 3.3, Granite 4.1, large-v3,
+Moonshine); this is the first to actually clear the punctuation/digit bar,
+and the first rejected purely on speed rather than accuracy or casing.
+Tables in analysis_tools/results/README.md; data in
+analysis_tools/results/2026-09-04/ (gitignored).
+
 ## 2026-09-04 — Granite Speech 4.1 2B bake-off: stays on turbo
 
 Curiosity-driven, not a specific complaint about turbo. A web search for

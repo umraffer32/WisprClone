@@ -142,3 +142,9 @@ a failed polish must never lose a dictation). Always address it as
 - Every dispatch: pair with a ~60s Monitor heartbeat, relayed as 2-3 plain
   sentences of real progress (never "still working"), stopped the moment
   the real completion notice arrives.
+- After a worktree-isolated dispatch reports done, verify it actually tore
+  down (`git worktree list`, `git branch -a | grep worktree`, `ListAgents`)
+  before moving on — a dispatched agent can nest its own sub-agent or
+  monitor without being asked, and nothing else checks that scaffolding
+  is gone. Clean up anything stray found, don't wait to be asked (2026-09-04,
+  BUGS.md same date).
