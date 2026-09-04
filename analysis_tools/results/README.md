@@ -16,7 +16,7 @@ hotwords before 2026-09-02).
 
 ## 2026-09-03 — Polish replay on the About Me interview's dictations (second confirmation)
 
-Question: does the 9/1 polish-off call (69% no-op, 21% punctuation-only over
+Question: does the 9/1 polish-off call (69% no-op, 14% punctuation-only over
 548 real dictations) hold up against a different corpus - the 31 dictations
 from an interview session, longer and more coherent than typical toggle-mode
 use? Same live model (qwen3.5:9b), same `_polish` prompt/options/guards,

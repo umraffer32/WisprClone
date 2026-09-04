@@ -75,7 +75,7 @@ continuation_gap_s = 4  # fallback only: the primary path reads the focused
 enabled = false         # LLM cleanup pass on dictations from either mode.
                         # Off since 2026-09-01 as a trial: over 548 real
                         # polished dictations the 9b changed nothing in 69%
-                        # and only punctuation in another 21%, so the pass
+                        # and only punctuation in another 14%, so the pass
                         # cost ~1s per dictation over min_audio_s for word
                         # level edits on about one in ten. Flip back to true
                         # (and restart) to re-enable; the model stays pulled.
