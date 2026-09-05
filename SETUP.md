@@ -2,7 +2,7 @@
 
 This is exactly what I did to get WisprClone running on my own machine, in the order I did it, including the two Windows-specific pieces that took real trial and error to figure out. This isn't a general public install guide, see README.md's [Scope](README.md#scope) section for why, but it's accurate: if you're curious enough to build your own copy anyway, this covers it top to bottom.
 
-One honest flag before you start: the `[polish]` section (the optional LLM cleanup pass) is enabled on my machine right now, but I'm still actively tuning its prompt and guardrails as I use it day to day. Everything else here is settled.
+One thing worth flagging before you start: `[polish]` (the optional LLM cleanup pass) is off on my machine right now, a trial that's been running since 2026-09-01. The Ollama section below covers why. Everything else here is settled.
 
 ## Prerequisites
 
