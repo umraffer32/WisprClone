@@ -344,13 +344,7 @@ class Pill:
         pill = (_PAD * S, _PAD * S, (_PAD + self._w) * S - 1, (_PAD + _H) * S - 1)
         img = Image.new("RGBA", (w, h))
         if state == "recording":
-            # halo: the pill's own silhouette blurred into the padding,
-            # breathing on the pulse clock. Floor of 120 keeps a visible
-            # ring at the dim end of the cycle - it breathes, never vanishes
-            gd = ImageDraw.Draw(img)
-            gd.rounded_rectangle(pill, radius=_RADIUS * S,
-                                 fill=(195, 238, 255, int(120 + 135 * self._glow)))
-            img = img.filter(ImageFilter.GaussianBlur((2.5 + 3.5 * self._glow) * S))
+            img = self._draw_halo(img, pill)
         d = ImageDraw.Draw(img)
         d.rounded_rectangle(pill, radius=_RADIUS * S,
                             fill=_ERR if state == "error" else _BG)
@@ -358,84 +352,104 @@ class Pill:
         self._check_box = None
         mid = h / 2
         if state == "recording":
-            # interior vignette: a cold-blue radial lift at the center that
-            # falls to the dark rim, breathing in sync with the halo so the
-            # pulse reads as coming from inside the pill
-            px0, py0 = (_PAD + 2) * S, (_PAD + 2) * S
-            pw, ph = (self._w - 4) * S, (_H - 4) * S
-            ys, xs = np.ogrid[0:ph, 0:pw]
-            r = np.sqrt(((xs - pw / 2) / (pw / 2)) ** 2
-                        + ((ys - ph / 2) / (ph / 2)) ** 2)
-            lift = np.clip(1 - r, 0, 1) ** 1.5
-            mask = Image.new("L", (pw, ph), 0)
-            ImageDraw.Draw(mask).rounded_rectangle(
-                (0, 0, pw - 1, ph - 1), radius=(_RADIUS - 2) * S, fill=255)
-            tint = np.zeros((ph, pw, 4), np.uint8)
-            tint[:, :, :3] = (70, 130, 180)
-            tint[:, :, 3] = (lift * (70 + 60 * self._glow)
-                             * (np.asarray(mask) / 255.0)).astype(np.uint8)
-            img.alpha_composite(Image.fromarray(tint), (px0, py0))
-            bw = (self._w - 2 * _RADIUS) * S / _NBARS
-            recent = list(self.levels)[-(_NBARS // 2):]  # oldest..newest
-            for i in range(_NBARS):
-                ring = int(abs(i - (_NBARS - 1) / 2))  # 0 at center, 4 at edge
-                lv = recent[-(ring + 1)]  # newest audio center, aging outward
-                t = 1 - ring / (_NBARS // 2 - 1)  # deep blue edge -> light center
-                bright = 0.4 + 0.6 * min(1.0, lv)  # quiet dims, loud blooms
-                fill = tuple(int((e + (c - e) * t) * bright)
-                             for c, e in zip(_BAR_RGB, _BAR_EDGE_RGB)) + (255,)
-                x = (_PAD + _RADIUS) * S + i * bw + bw / 2
-                bh = max(1.5, lv * (_H - 10) / 2) * S
-                d.rounded_rectangle((x - S, mid - bh, x + S, mid + bh),
-                                    radius=S, fill=fill)
+            self._draw_vignette(img)
+            self._draw_bars(d, mid)
         elif state == "loading":
-            d.text((w / 2, h / 2), "loading…", fill="#aaaaaa",
+            d.text((w / 2, mid), "loading…", fill="#aaaaaa",
                    font=self._font, anchor="mm")
         elif state == "result":
-            # click-to-repaste offer: checkmark, seconds-left countdown, and
-            # an X to dismiss early instead of waiting out the countdown.
-            m = mid
-            my = _PAD + _H / 2  # unscaled midline, for the hit-boxes
-            cx = (_PAD + 29) * S  # horizontal offset widened with the pill
-            if self._check_flashing:
-                d.ellipse((cx - 9 * S, m - 9 * S, cx + 9 * S, m + 9 * S),
-                          fill=_BAR)
-                check_fill = "#ffffff"
-            elif self._check_hover:
-                d.ellipse((cx - 9 * S, m - 9 * S, cx + 9 * S, m + 9 * S),
-                          fill="#3a3a46")
-                check_fill = "#8edcff"
-            else:
-                check_fill = _BAR
-            pts = [(cx - 6 * S, m), (cx - 2 * S, m + 4 * S), (cx + 6 * S, m - 5 * S)]
-            d.line(pts, fill=check_fill, width=3 * S, joint="curve")
-            for px, py in (pts[0], pts[-1]):  # round caps
-                d.ellipse((px - 1.5 * S, py - 1.5 * S, px + 1.5 * S, py + 1.5 * S),
-                          fill=check_fill)
-            self._check_box = (_PAD + 29 - 10, my - 10, _PAD + 29 + 10, my + 10)
-            d.text(((_PAD + 55) * S, m), str(max(1, math.ceil(level))),
-                   fill="#aaaaaa", font=self._font_count, anchor="mm")
-            xx = (_PAD + self._w - _RADIUS - 7) * S  # widened with the pill
-            if self._x_dismissing:
-                d.ellipse((xx - 8 * S, m - 8 * S, xx + 8 * S, m + 8 * S),
-                          fill=_ERR)
-                x_fill = "#ffffff"
-            elif self._x_hover:
-                d.ellipse((xx - 8 * S, m - 8 * S, xx + 8 * S, m + 8 * S),
-                          fill="#3a3a46")
-                x_fill = "#ffffff"
-            else:
-                x_fill = "#aaaaaa"
-            d.line((xx - 4 * S, m - 4 * S, xx + 4 * S, m + 4 * S),
-                   fill=x_fill, width=2 * S)
-            d.line((xx - 4 * S, m + 4 * S, xx + 4 * S, m - 4 * S),
-                   fill=x_fill, width=2 * S)
-            self._dismiss_box = (_PAD + self._w - _RADIUS - 15, my - 8,
-                                 _PAD + self._w - _RADIUS + 1, my + 8)
+            self._draw_result(d, mid, level)
         elif state == "error":
-            d.text((w / 2, h / 2), "error", fill="white",
+            d.text((w / 2, mid), "error", fill="white",
                    font=self._font, anchor="mm")
         return img.resize((self._w + 2 * _PAD, _H + 2 * _PAD), Image.LANCZOS)
+
+    def _draw_halo(self, img, pill):
+        """The pill's own silhouette blurred into the padding, breathing on
+        the pulse clock. Floor of 120 keeps a visible ring at the dim end of
+        the cycle - it breathes, never vanishes."""
+        ImageDraw.Draw(img).rounded_rectangle(
+            pill, radius=_RADIUS * _S,
+            fill=(195, 238, 255, int(120 + 135 * self._glow)))
+        return img.filter(ImageFilter.GaussianBlur((2.5 + 3.5 * self._glow) * _S))
+
+    def _draw_vignette(self, img):
+        """Interior vignette: a cold-blue radial lift at the center that
+        falls to the dark rim, breathing in sync with the halo so the pulse
+        reads as coming from inside the pill."""
+        S = _S
+        px0, py0 = (_PAD + 2) * S, (_PAD + 2) * S
+        pw, ph = (self._w - 4) * S, (_H - 4) * S
+        ys, xs = np.ogrid[0:ph, 0:pw]
+        r = np.sqrt(((xs - pw / 2) / (pw / 2)) ** 2
+                    + ((ys - ph / 2) / (ph / 2)) ** 2)
+        lift = np.clip(1 - r, 0, 1) ** 1.5
+        mask = Image.new("L", (pw, ph), 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, pw - 1, ph - 1), radius=(_RADIUS - 2) * S, fill=255)
+        tint = np.zeros((ph, pw, 4), np.uint8)
+        tint[:, :, :3] = (70, 130, 180)
+        tint[:, :, 3] = (lift * (70 + 60 * self._glow)
+                         * (np.asarray(mask) / 255.0)).astype(np.uint8)
+        img.alpha_composite(Image.fromarray(tint), (px0, py0))
+
+    def _draw_bars(self, d, mid):
+        S = _S
+        bw = (self._w - 2 * _RADIUS) * S / _NBARS
+        recent = list(self.levels)[-(_NBARS // 2):]  # oldest..newest
+        for i in range(_NBARS):
+            ring = int(abs(i - (_NBARS - 1) / 2))  # 0 at center, 4 at edge
+            lv = recent[-(ring + 1)]  # newest audio center, aging outward
+            t = 1 - ring / (_NBARS // 2 - 1)  # deep blue edge -> light center
+            bright = 0.4 + 0.6 * min(1.0, lv)  # quiet dims, loud blooms
+            fill = tuple(int((e + (c - e) * t) * bright)
+                         for c, e in zip(_BAR_RGB, _BAR_EDGE_RGB)) + (255,)
+            x = (_PAD + _RADIUS) * S + i * bw + bw / 2
+            bh = max(1.5, lv * (_H - 10) / 2) * S
+            d.rounded_rectangle((x - S, mid - bh, x + S, mid + bh),
+                                radius=S, fill=fill)
+
+    def _draw_result(self, d, mid, seconds_left):
+        """Click-to-repaste offer: checkmark, seconds-left countdown, and
+        an X to dismiss early instead of waiting out the countdown."""
+        S = _S
+        my = _PAD + _H / 2  # unscaled midline, for the hit-boxes
+        cx = (_PAD + 29) * S  # horizontal offset widened with the pill
+        if self._check_flashing:
+            d.ellipse((cx - 9 * S, mid - 9 * S, cx + 9 * S, mid + 9 * S),
+                      fill=_BAR)
+            check_fill = "#ffffff"
+        elif self._check_hover:
+            d.ellipse((cx - 9 * S, mid - 9 * S, cx + 9 * S, mid + 9 * S),
+                      fill="#3a3a46")
+            check_fill = "#8edcff"
+        else:
+            check_fill = _BAR
+        pts = [(cx - 6 * S, mid), (cx - 2 * S, mid + 4 * S), (cx + 6 * S, mid - 5 * S)]
+        d.line(pts, fill=check_fill, width=3 * S, joint="curve")
+        for px, py in (pts[0], pts[-1]):  # round caps
+            d.ellipse((px - 1.5 * S, py - 1.5 * S, px + 1.5 * S, py + 1.5 * S),
+                      fill=check_fill)
+        self._check_box = (_PAD + 29 - 10, my - 10, _PAD + 29 + 10, my + 10)
+        d.text(((_PAD + 55) * S, mid), str(max(1, math.ceil(seconds_left))),
+               fill="#aaaaaa", font=self._font_count, anchor="mm")
+        xx = (_PAD + self._w - _RADIUS - 7) * S  # widened with the pill
+        if self._x_dismissing:
+            d.ellipse((xx - 8 * S, mid - 8 * S, xx + 8 * S, mid + 8 * S),
+                      fill=_ERR)
+            x_fill = "#ffffff"
+        elif self._x_hover:
+            d.ellipse((xx - 8 * S, mid - 8 * S, xx + 8 * S, mid + 8 * S),
+                      fill="#3a3a46")
+            x_fill = "#ffffff"
+        else:
+            x_fill = "#aaaaaa"
+        d.line((xx - 4 * S, mid - 4 * S, xx + 4 * S, mid + 4 * S),
+               fill=x_fill, width=2 * S)
+        d.line((xx - 4 * S, mid + 4 * S, xx + 4 * S, mid - 4 * S),
+               fill=x_fill, width=2 * S)
+        self._dismiss_box = (_PAD + self._w - _RADIUS - 15, my - 8,
+                             _PAD + self._w - _RADIUS + 1, my + 8)
 
     def _push_frame(self, img):
         """Blit an RGBA frame to the layered window (premultiplied BGRA)."""
@@ -582,9 +596,6 @@ def make_tray(base_dir, cfg, status, clipboard, recorder):
 if __name__ == "__main__":
     # Self-test: cycle pill states with fake levels; click other windows to
     # confirm no focus theft, across several hide/show cycles.
-    import math
-    import time
-
     root = tk.Tk()
     pill = Pill(root)
     t0 = time.monotonic()

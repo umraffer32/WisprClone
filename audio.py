@@ -48,7 +48,7 @@ def _mute_gain(pos, n, total):
         gain[fade_out] = 1.0 - idx[fade_out] / fade
         fade_in = idx >= total - fade
         gain[fade_in] = (idx[fade_in] - (total - fade) + 1) / fade
-    return gain.astype(np.float32)
+    return gain
 
 
 class Ducker(threading.Thread):
@@ -249,19 +249,28 @@ class Recorder:
         self.suspended = False
         self.status.mic_ok = True
 
+    def _release_stream(self, abort=False):
+        """Stop, close, and forget the stream, tolerating a device that's
+        already gone. abort=True drops pending blocks instead of draining
+        them, for a stream that may be dead."""
+        try:
+            if self._stream is not None:
+                if abort:
+                    self._stream.abort()
+                else:
+                    self._stream.stop()
+                self._stream.close()
+        except Exception:
+            pass
+        self._stream = None
+
     def suspend(self):
         """Release the mic while idle so the Windows in-use indicator clears.
         The pre-roll is gone until the next open, so the first dictation
         after a suspend may clip its opening syllable - documented tradeoff."""
         self.suspended = True
         self.preroll.clear()
-        try:
-            if self._stream is not None:
-                self._stream.stop()
-                self._stream.close()
-        except Exception:
-            pass
-        self._stream = None
+        self._release_stream()
 
     def reopen(self):
         """Recover from a dead stream or follow a changed default device.
@@ -270,13 +279,7 @@ class Recorder:
         only way to see a new default mic. sounddevice's _terminate/_initialize
         are private API - acceptable with the version pinned.
         """
-        try:
-            if self._stream is not None:
-                self._stream.abort()
-                self._stream.close()
-        except Exception:
-            pass
-        self._stream = None
+        self._release_stream(abort=True)
         try:
             sd._terminate()
             sd._initialize()
@@ -286,12 +289,7 @@ class Recorder:
             raise
 
     def close(self):
-        try:
-            if self._stream is not None:
-                self._stream.stop()
-                self._stream.close()
-        except Exception:
-            pass
+        self._release_stream()
 
 
 if __name__ == "__main__":

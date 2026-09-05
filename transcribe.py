@@ -15,6 +15,8 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
+log = logging.getLogger("wisprclone")
+
 # cuBLAS/cuDNN come from pip wheels; their DLL dirs must be visible before
 # faster_whisper (ctranslate2) is imported or CUDA init fails. ctranslate2
 # loads them via plain LoadLibrary, which searches PATH and ignores
@@ -36,8 +38,7 @@ try:
 except (ImportError, OSError) as _e:
     import types
     sys.modules["av"] = types.ModuleType("av")
-    logging.getLogger("wisprclone").warning(
-        "import av failed (%s); stubbed it so faster_whisper can load", _e)
+    log.warning("import av failed (%s); stubbed it so faster_whisper can load", _e)
 
 import numpy as np
 import pywintypes
@@ -139,7 +140,6 @@ def _lost_sentence(text, polished):
             return sent
     return None
 
-log = logging.getLogger("wisprclone")
 
 # a machine-wide HTTP_PROXY would reroute the Ollama call (no automatic
 # loopback bypass for 127.0.0.1 on Windows) - never trust proxy env vars
@@ -248,15 +248,21 @@ class _GUITHREADINFO(ctypes.Structure):
                 ("rcCaret", wt.RECT)]
 
 
+def _gui_thread_info():
+    """GetGUIThreadInfo for the foreground thread, or None if the call failed."""
+    gti = _GUITHREADINFO()
+    gti.cbSize = ctypes.sizeof(gti)
+    if ctypes.windll.user32.GetGUIThreadInfo(0, ctypes.byref(gti)):
+        return gti
+    return None
+
+
 def caret_visible():
     """True when the foreground window shows a system text caret - i.e. the
     paste almost certainly landed in a real text field. Apps that draw their
     own caret read as False, which errs toward showing the repaste offer."""
-    gti = _GUITHREADINFO()
-    gti.cbSize = ctypes.sizeof(gti)
-    if ctypes.windll.user32.GetGUIThreadInfo(0, ctypes.byref(gti)):
-        return bool(gti.hwndCaret)
-    return False
+    gti = _gui_thread_info()
+    return gti is not None and bool(gti.hwndCaret)
 
 
 _TERMINAL_CLASSES = {"CASCADIA_HOSTING_WINDOW_CLASS",  # Windows Terminal
@@ -340,11 +346,9 @@ def paste_blocked():
     flags; Chromium and Firefox draw their own menu popups, which hold
     mouse capture (that's how they dismiss on an outside click) and report
     a menu-ish focused element via UI Automation."""
-    gti = _GUITHREADINFO()
-    gti.cbSize = ctypes.sizeof(gti)
-    if ctypes.windll.user32.GetGUIThreadInfo(0, ctypes.byref(gti)):
-        if gti.flags & _GUI_MENU_FLAGS or gti.hwndCapture:
-            return True
+    gti = _gui_thread_info()
+    if gti is not None and (gti.flags & _GUI_MENU_FLAGS or gti.hwndCapture):
+        return True
     try:
         return _get_uia().GetFocusedElement().CurrentControlType in _MENU_CONTROL_TYPES
     except Exception:
@@ -509,32 +513,35 @@ class Clipboard:
         for fmt in _EXCLUDE_FORMATS:
             win32clipboard.SetClipboardData(fmt, zero)
 
+    def _write_text(self, text):
+        """Call with the clipboard already open: replaces its contents."""
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+        self._mark_transient()
+
     def paste(self, text):
+        if not self._open():
+            log.error("clipboard busy, dropping paste: %r", text[:80])
+            return None
         saved = {}
         restorable = False
-        if self._open():
-            try:
-                formats, f = [], 0
-                while (f := win32clipboard.EnumClipboardFormats(f)):
-                    formats.append(f)
-                has_text = any(fmt in _TEXT_FORMATS for fmt in formats)
-                restorable = not (has_text and not all(fmt in _SAFE_FORMATS for fmt in formats))
-                if restorable:
-                    saved = {fmt: win32clipboard.GetClipboardData(fmt)
-                             for fmt in formats if fmt in _SAFE_FORMATS}
-                    if formats and not saved:
-                        # nothing we can safely carry forward (e.g. a copied
-                        # file) - leave the dictated text rather than wipe
-                        # the clipboard to empty
-                        restorable = False
-                win32clipboard.EmptyClipboard()
-                win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
-                self._mark_transient()
-            finally:
-                win32clipboard.CloseClipboard()
-        else:
-            log.error("clipboard busy, dropping paste: %r", text[:80])
-            return
+        try:
+            formats, f = [], 0
+            while (f := win32clipboard.EnumClipboardFormats(f)):
+                formats.append(f)
+            has_text = any(fmt in _TEXT_FORMATS for fmt in formats)
+            restorable = not (has_text and not all(fmt in _SAFE_FORMATS for fmt in formats))
+            if restorable:
+                saved = {fmt: win32clipboard.GetClipboardData(fmt)
+                         for fmt in formats if fmt in _SAFE_FORMATS}
+                if formats and not saved:
+                    # nothing we can safely carry forward (e.g. a copied
+                    # file) - leave the dictated text rather than wipe
+                    # the clipboard to empty
+                    restorable = False
+            self._write_text(text)
+        finally:
+            win32clipboard.CloseClipboard()
 
         # A physically held modifier would corrupt the Ctrl+V chord
         for mod in (Key.ctrl, Key.shift, Key.alt):
@@ -562,9 +569,7 @@ class Clipboard:
     def set_text(self, text):
         if self._open():
             try:
-                win32clipboard.EmptyClipboard()
-                win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
-                self._mark_transient()
+                self._write_text(text)
             finally:
                 win32clipboard.CloseClipboard()
 
@@ -624,6 +629,15 @@ def vad_shadow(audio, jobs):
 # STARTING a warm, and the last one's boost carries coverage ~2s past it.
 WARM_INTERVAL_S = 2.0
 WARM_BOUND_S = 15.0
+
+
+def _warm_model(model):
+    """Run a second of silence through the encoder. transcribe() is lazy and
+    VAD short-circuits silence before the encoder runs, so a warmup must
+    disable VAD and consume the generator."""
+    segs, _ = model.transcribe(np.zeros(16000, dtype=np.float32),
+                               language="en", vad_filter=False)
+    list(segs)
 
 
 class Transcriber(threading.Thread):
@@ -687,11 +701,7 @@ class Transcriber(threading.Thread):
         m = WhisperModel(self.cfg["name"], device=device,
                          compute_type=self.cfg["compute_type"] if device == "cuda" else "int8",
                          local_files_only=True)
-        # transcribe() is lazy and VAD short-circuits silence before the
-        # encoder runs, so a warmup must disable VAD and consume the generator
-        segs, _ = m.transcribe(np.zeros(16000, dtype=np.float32),
-                               language="en", vad_filter=False)
-        list(segs)
+        _warm_model(m)
         return m
 
     def _load_models(self):
@@ -752,15 +762,12 @@ class Transcriber(threading.Thread):
         ending, including a too-short discard, which enqueues nothing -
         waits behind at most the one warm already in flight (~0.2s hot).
         Bypasses _transcribe on purpose - a failed warm must not count
-        toward the CPU latch. Same constraint as _load's warmup: VAD off
-        and the generator consumed, or the encoder never runs. Failures are
-        swallowed - a warm is optional and must never flash the pill."""
+        toward the CPU latch. Failures are swallowed - a warm is optional
+        and must never flash the pill."""
         start = time.monotonic()
         while True:
             try:
-                segs, _ = self.model.transcribe(np.zeros(16000, dtype=np.float32),
-                                                language="en", vad_filter=False)
-                list(segs)
+                _warm_model(self.model)
             except Exception:
                 log.exception("gpu warm failed")
                 return  # broken once means broken on retry - log it once
@@ -789,8 +796,8 @@ class Transcriber(threading.Thread):
                         "may be slow or unpolished", e)
 
     def _polish(self, text):
-        """LLM cleanup for rambling toggle-mode dictations - false starts,
-        run-on sentences. Any failure (Ollama down, timeout, suspicious
+        """LLM cleanup for long dictations (min_audio_s and up, either mode) -
+        false starts, run-on sentences. Any failure (Ollama down, timeout, suspicious
         output length) falls back to the raw transcript rather than risk
         losing or corrupting the dictation. Returns (text, status); status
         distinguishes a real no-edit-needed pass ("ok") from a fallback
@@ -894,9 +901,9 @@ class Transcriber(threading.Thread):
         self.status.ready = True
         log.info("model ready on %s", self.status.device)
         if self.polish_cfg["enabled"]:
-            # background: don't delay PTT readiness for a model toggle mode
-            # alone needs. A cold Ollama load is the 3s+ delay a first
-            # dictation would otherwise pay.
+            # background: don't delay readiness for a model only dictations
+            # over min_audio_s need. A cold Ollama load is the 3s+ delay the
+            # first of those would otherwise pay.
             threading.Thread(target=self._warm_polish, daemon=True).start()
 
         while True:
@@ -1111,7 +1118,6 @@ class Transcriber(threading.Thread):
 if __name__ == "__main__":
     # Self-test: transcribe a wav file. Proves DLL wiring, CUDA, and fallback.
     import tomllib
-    import wave
 
     logging.basicConfig(level=logging.INFO)
     with open(Path(__file__).parent / "config.toml", "rb") as f:

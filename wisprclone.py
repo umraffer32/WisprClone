@@ -52,12 +52,12 @@ def single_instance():
 
 
 def resolve_ptt(name):
-    """Returns (kind, pynput object, virtual-key code) for the configured PTT input."""
+    """Returns (kind, virtual-key code) for the configured PTT input."""
     if name in VK:
-        return "mouse", getattr(mouse.Button, name), VK[name]
+        return "mouse", VK[name]
     key = getattr(keyboard.Key, name, None) or keyboard.KeyCode.from_char(name)
     vk = key.value.vk if isinstance(key, keyboard.Key) else key.vk
-    return "keyboard", key, vk
+    return "keyboard", vk
 
 
 class StateMachine:
@@ -84,9 +84,7 @@ class StateMachine:
     def ptt_release(self):
         with self.lock:
             if self.state == RECORDING_PTT:
-                too_short = self.recorder.recording_seconds < self.min_s
-                self.recorder.stop_recording(discard=too_short)
-                self.state = IDLE
+                self._stop_recording()
 
     def toggle_tap(self):
         with self.lock:
@@ -98,9 +96,14 @@ class StateMachine:
                 self.state = RECORDING_TOGGLE
                 self.recorder.start_recording(mode="toggle")
             elif self.state == RECORDING_TOGGLE:
-                too_short = self.recorder.recording_seconds < self.min_s
-                self.recorder.stop_recording(discard=too_short)
-                self.state = IDLE
+                self._stop_recording()
+
+    def _stop_recording(self):
+        """Hand the recording off, or discard one held too short to be a
+        real dictation. Caller holds the lock."""
+        too_short = self.recorder.recording_seconds < self.min_s
+        self.recorder.stop_recording(discard=too_short)
+        self.state = IDLE
 
     def timeout_stop(self):
         """Max-length hit. A PTT this long is a stuck button: discard, never
@@ -159,7 +162,8 @@ def main():
     worker = Transcriber(cfg, BASE, jobs, status)
     worker.start()
 
-    ptt_kind, ptt_obj, ptt_vk = resolve_ptt(cfg["hotkeys"]["ptt"])
+    ptt_kind, ptt_vk = resolve_ptt(cfg["hotkeys"]["ptt"])
+    ptt_xnum = {"x1": 1, "x2": 2}.get(cfg["hotkeys"]["ptt"], 0)
     toggle_key = getattr(keyboard.Key, cfg["hotkeys"]["toggle_key"])
 
     # --- input listeners -------------------------------------------------
@@ -173,7 +177,7 @@ def main():
     # kills the pynput listener thread, i.e. all hotkeys until restart.
     # suppress_event() itself raises to work, so it stays OUTSIDE the try.
     WM_XDOWN, WM_XUP = {0x020B, 0x00AB}, {0x020C, 0x00AC}
-    WM_KEYDOWN, WM_KEYUP = {0x0100, 0x0104}, {0x0101, 0x0105}
+    WM_KEYDOWN = {0x0100, 0x0104}
     LLKHF_INJECTED = 0x10
     ptt_is_down = [False]  # our own physical-state tracking; suppressed
     #                        events never reach GetAsyncKeyState
@@ -227,7 +231,6 @@ def main():
         except Exception:
             log.exception("key release callback")
 
-    ptt_xnum = {"x1": 1, "x2": 2}.get(cfg["hotkeys"]["ptt"], 0)
     mouse_listener = mouse.Listener(win32_event_filter=mouse_filter)
     kb_listener = keyboard.Listener(on_press=on_press, on_release=on_release,
                                     win32_event_filter=kb_filter)
@@ -272,7 +275,7 @@ def main():
         return False
 
     def tick():
-        nonlocal mic_recovery_tried, was_recording, last_menu_update
+        nonlocal mic_recovery_tried, was_recording, last_menu_update, last_activity
         if status.quit_requested:
             teardown()
             return
@@ -300,7 +303,6 @@ def main():
         # Idle mic release: clears the Windows in-use indicator when the app
         # hasn't been used for a while; reopens the instant a recording is
         # requested (first syllable after a reopen may clip - documented).
-        nonlocal last_activity
         if rec_now or status.transcribing > 0:
             last_activity = time.monotonic()
         if recorder.suspended:
