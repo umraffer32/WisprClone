@@ -31,10 +31,12 @@ new draw methods had one cosmetic alias inconsistency. Two other candidates
 (an audio.py flag-argument style nit, a ui.py function over the line-count
 guideline) were raised but refuted on verify as defensible trade-offs and
 correctly dropped. All four real findings fixed same day, py_compile clean.
-The three code fixes (transcribe.py, wisprclone.py, ui.py) are still
-uncommitted, pending a live restart - they touch the clipboard-restore path
-and the shutdown path, neither of which the two dictations above happened to
-exercise.
+The three code fixes (transcribe.py, wisprclone.py, ui.py) touched the
+clipboard-restore path and the shutdown path, neither of which the two
+dictations above happened to exercise, so they sat uncommitted until Uriah
+had used the app normally for a few days and confirmed it still felt right.
+Committed `a04a369`. `code-cleanup` is not yet merged to main - his call,
+once he's sat with it a bit longer.
 
 ## 2026-09-04 — Canary-1B bake-off: rejected, but breaks part of the pattern
 
