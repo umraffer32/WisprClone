@@ -3,6 +3,43 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-05 — transcribe.py split into cleanup/polish/clipboard/focus (branch: transcribe-split)
+
+transcribe.py had grown to 1144 lines covering five distinct jobs. Asked for
+a pass to minimize it without changing behavior; dispatched as a single
+Fable agent at max reasoning depth, worktree-isolated, full autonomy on the
+exact shape. Landed close to the proposed split: `cleanup.py` (161 lines,
+the text-cleanup regexes and `clean_text`/`join_segments`, previously split
+across two ends of the file with ~160 unrelated lines between them),
+`polish.py` (95, the prompt and its output guards, no imports beyond `re`),
+`clipboard.py` (124, the `Clipboard` class), and `focus.py` (127, the
+Win32/UI Automation focus checks, plus one new small shared helper,
+`foreground_window()`). transcribe.py itself is down to 676 lines: model
+loading and the `Transcriber` thread only. Every moved function/constant is
+byte-identical to the original except three disclosed edits (the
+`foreground_window()` call, two comment cross-references that would
+otherwise point at the wrong file). `analysis_tools/mine_polish_3b.py`,
+which deliberately scraped `POLISH_PROMPT` out of transcribe.py's source
+text to avoid a heavy faster_whisper/CUDA import, now does a real
+`from polish import POLISH_PROMPT` instead - confirmed importing `polish`
+pulls in no CUDA/ML modules at all.
+
+Every external import (`wisprclone.py`, the analysis scripts, and several
+gitignored scripts under `analysis_tools/results/*/` that reach into
+private names like `_STUTTER`/`_GUARD_STOP`/`_SENT_SPLIT`) keeps working
+unchanged via re-exports from transcribe.py - found by an exhaustive
+filesystem grep, not just the imports already known about, and each
+verified in a fresh interpreter. CLAUDE.md's file map updated in the same
+commit. One real hiccup during the dispatch itself, not the code: the first
+worktree attempt silently based itself on a stale commit from several turns
+earlier instead of the actual branch tip, caught before it did any work -
+see [[worktree-dispatch-needs-pushed-branch]].
+
+Committed `adc0efb`. Live-tested: PTT dictation (ducking, pill, start cue
+all fine), an extended toggle-mode dictation, and specifically the
+repaste-offer path (right-clicking off the text box to force the
+paste-verification check) - all confirmed good.
+
 ## 2026-09-05 — Clean-code pass on the four core app files (branch: code-cleanup)
 
 Uriah asked for a readability pass against his own clean-code conventions,
