@@ -26,11 +26,25 @@ onboarding work unless explicitly asked.
   first cue attempt had no mute and corrupted the first word). Also
   `Ducker` (lowers other apps' volume while the mic is hot) and `Cue`
   (plays the sounds/ clips via winsound on record start/stop).
-- `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, chunk
-  join `join_segments()` (lowercases a capital the batched pipeline puts at
-  a mid-sentence chunk cut), regex `clean_text()`, LLM polish
-  (duration-gated, mode-agnostic), clipboard paste. Also the polish prompt
-  and its output guards.
+- `transcribe.py` — `Transcriber` thread: normalize/trim, whisper, then
+  `cleanup.py`'s join and regex pass, the LLM polish call (duration-gated,
+  mode-agnostic; prompt and output guards in `polish.py`), continuation
+  stitching and the paste through `clipboard.py`, the landed check that
+  offers click-to-repaste, history.log and job-line logging. Also
+  `Status`, the state shared with the recorder and UI.
+- `cleanup.py` — text after whisper: `join_segments()` (lowercases a capital
+  the batched pipeline puts at a mid-sentence chunk cut) and the regex
+  `clean_text()` (fillers, stutters, runaway repeats, leading "and",
+  sentence casing, corrections.txt, short-fragment period strip).
+- `polish.py` — `POLISH_PROMPT` and the polish output guards (`_SWEARS`,
+  `_lost_sentence`). No model imports, so a script can take the prompt
+  without paying transcribe.py's faster-whisper/CUDA startup.
+- `clipboard.py` — `Clipboard`: saves the prior clipboard, writes the text,
+  sends Ctrl+V, puts the prior contents back, and marks everything it
+  writes as excluded from Clipboard History and cloud sync.
+- `focus.py` — where a paste would land, via Win32 and UI Automation:
+  `is_terminal()`, `caret_visible()`, `focused_editable()`,
+  `focused_text()`, `paste_blocked()`.
 - `ui.py` — recording pill overlay (draggable; position persists in the
   gitignored `pill_pos.txt`; `Anchor` thread re-centers it under the
   Claude Code compose box via UI Automation while that app is in front)
@@ -61,8 +75,9 @@ onboarding work unless explicitly asked.
   `mine_segment_polish.py` / `mine_ollama_parallel.py`: offline analysis
   scripts over the logs above, run by hand, summary output only. Each
   finds the repo root's `wisprclone.log`/`config.toml` via
-  `BASE = Path(__file__).parent.parent`; the three that import
-  `transcribe.py` add the repo root to `sys.path` first.
+  `BASE = Path(__file__).parent.parent`; the four that import from the repo
+  root (`transcribe.py`, or just `polish.py` for `mine_polish_3b.py`) add it
+  to `sys.path` first.
 - `analysis_tools/results/` — `README.md` is the analysis log: one entry
   per offline test (newest first) with the full tables, where LOG.md keeps
   only the decision. Each dated subfolder holds that day's data and

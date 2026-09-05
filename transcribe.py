@@ -1,12 +1,9 @@
-"""Model loading, transcription worker, cleanup, and paste-into-focused-app."""
+"""Model loading and the Transcriber worker thread: whisper, clean, polish, paste, log."""
 
-import ctypes
-import ctypes.wintypes as wt
 import json
 import logging
 import os
 import re
-import struct
 import sys
 import threading
 import time
@@ -41,105 +38,20 @@ except (ImportError, OSError) as _e:
     log.warning("import av failed (%s); stubbed it so faster_whisper can load", _e)
 
 import numpy as np
-import pywintypes
 import requests
-import win32clipboard
 from faster_whisper import BatchedInferencePipeline, WhisperModel
 from faster_whisper.vad import VadOptions, get_speech_timestamps
-from pynput.keyboard import Controller, Key
 
-POLISH_PROMPT = (
-    "Clean up this dictated speech with minimal, conservative edits:\n"
-    "- Remove filler words (um, uh, you know, like) and immediate word "
-    "stutters.\n"
-    "- Remove a false start only when the speaker immediately restarts the "
-    "same sentence. This includes repeated-word stammers like 'there were, "
-    "there was' or 'I think was it, was it' - keep only the final, complete "
-    "version of the restarted phrase.\n"
-    "  Example: 'there were, there was a thing' -> 'there was a thing'.\n"
-    "- Fix punctuation and obvious grammar slips.\n"
-    "Hard rules:\n"
-    "- Add nothing: never append words the speaker did not say, and never "
-    "answer a question the speaker asked.\n"
-    "- Never drop, merge, or reorder sentences: every sentence of the input "
-    "must appear as a sentence in the output.\n"
-    "- A question must remain a question.\n"
-    "- Keep the speaker's own wording; do not paraphrase, summarize, or "
-    "improve style. Removing a stammered restart is not paraphrasing.\n"
-    "- Preserve all profanity and swear words exactly as spoken - never "
-    "remove, replace, or soften them.\n"
-    "- If unsure whether something is a stammer vs. intentional repetition, "
-    "leave it unchanged.\n"
-    "Output only the cleaned text - no preamble, no quotes, no "
-    "explanation.\n\nText: "
-)
-
-# A model's alignment can quietly sanitize swears despite the prompt's
-# preserve-profanity rule (qwen2.5 rewrote "dog shit" out entirely,
-# 2026-08-25), so _polish backs the rule with a count check against this
-# list. Inflections are spelled out because \b can't connect "fucking" to
-# "fuck". Internal sanity list, not a config knob. Matched against
-# lowercased text, so no IGNORECASE needed.
-_SWEARS = re.compile(
-    r"\b(?:fuck(?:ing|ed|er|ers)?|motherfuck(?:ing|er|ers)?|shit(?:s|ty)?|"
-    r"bullshit|damn|dammit|goddamn(?:it)?|ass(?:es|hole|holes)?|"
-    r"bitch(?:es|y)?|bastards?|crap(?:py)?|piss(?:ed|ing)?|dicks?|cocks?|"
-    r"cunts?|pricks?|whores?|sluts?)\b")
-
-# The prompt's never-drop-sentences rule is the one qwen2.5 breaks most
-# quietly: a whole sentence vanishing from a multi-sentence dictation moves
-# the length ratio too little to trip min_ratio and needn't be a question
-# (405-case replay 2026-08-27: 3 whole-sentence drops, none caught by the
-# guards above). _lost_sentence backs that rule the way _SWEARS backs
-# profanity: a sentence counts as surviving only if at least half its
-# content words (or their crude stems, so "causing"->"caused" still
-# matches) appear anywhere in the output. Function words and fillers don't
-# count - polish removes those legitimately - and a stammered restart can't
-# false-fire because its words survive in the kept version of the phrase.
-# Digits don't count either: qwen reformats them ("830" -> "8:30"), which
-# only looks like a mismatch. Internal sanity thresholds, not config knobs.
-_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
-_GUARD_WORD = re.compile(r"[a-z']+")
-_GUARD_STOP = frozenset("""
-a an the and or but if so to of in on at for with by from as is are was were
-be been being am i you he she it we they me him her us them my your his its
-our their this that these those there here not no nor do does did doing have
-has had having will would can could should shall may might must what which
-who whom whose when where why how then than too very also just really
-actually basically literally kind sort course okay ok yeah yes well um uh
-erm hmm like know mean gonna wanna oh all some any more most other into out
-up down over under again once about because while during before after
-""".split())
-
-
-def _guard_stem(w):
-    for suf in ("ing", "ed", "es", "s", "ly"):
-        if w.endswith(suf) and len(w) - len(suf) >= 3:
-            return w[:-len(suf)]
-    return w
-
-
-def _guard_words(s):
-    return [w for w in (t.strip("'") for t in _GUARD_WORD.findall(s.lower()))
-            if w and w not in _GUARD_STOP]
-
-
-def _lost_sentence(text, polished):
-    """First input sentence whose content didn't survive into polished
-    (under half its content words present), or None. Sentences with fewer
-    than 2 content words carry too little signal to judge and are skipped."""
-    out_words = set(_guard_words(polished))
-    out_stems = {_guard_stem(w) for w in out_words}
-    for sent in _SENT_SPLIT.split(text):
-        words = _guard_words(sent)
-        if len(words) < 2:
-            continue
-        hits = sum(1 for w in words
-                   if w in out_words or _guard_stem(w) in out_stems)
-        if hits / len(words) < 0.5:
-            return sent
-    return None
-
+# The analysis scripts (analysis_tools/ and its gitignored results/ folders)
+# import these names from transcribe, so the ones this file doesn't use
+# itself - _FILLER, _STUTTER, _RUNAWAY_REPEAT, _GUARD_STOP, _SENT_SPLIT -
+# are imported here only to keep those scripts working.
+from cleanup import (_FILLER, _RUNAWAY_REPEAT, _STUTTER, _proper_nouns,
+                     clean_text, join_segments)
+from clipboard import Clipboard
+from focus import (caret_visible, focused_editable, focused_text,
+                   foreground_window, is_terminal, paste_blocked)
+from polish import POLISH_PROMPT, _GUARD_STOP, _SENT_SPLIT, _SWEARS, _lost_sentence
 
 # a machine-wide HTTP_PROXY would reroute the Ollama call (no automatic
 # loopback bypass for 127.0.0.1 on Windows) - never trust proxy env vars
@@ -152,207 +64,6 @@ _ollama.trust_env = False
 # next - the mechanism repetition loops and end-of-clip hallucinations feed on
 DECODE_OPTS = dict(language="en", vad_filter=True,
                    condition_on_previous_text=False)
-
-# Formats we can save and replay byte-for-byte. CF_DIB/CF_DIBV5/PNG cover a
-# copied screenshot's actual image data. A screenshot also litters the
-# clipboard with CF_BITMAP (a live GDI handle that dies the moment we touch
-# the clipboard, not a copyable buffer) and OS plumbing (DataObject,
-# cloud-clipboard flags) - none of that is content a paste target needs, so
-# it's fine to drop. We only refuse to restore when TEXT shows up alongside
-# something outside this set (rich text from Word/browsers) - there, partial
-# restore would silently downgrade it to plain text, so we skip entirely.
-_TEXT_FORMATS = {win32clipboard.CF_TEXT, win32clipboard.CF_OEMTEXT,
-                 win32clipboard.CF_UNICODETEXT, win32clipboard.CF_LOCALE}
-_IMAGE_FORMATS = {win32clipboard.CF_DIB, win32clipboard.CF_DIBV5,
-                  win32clipboard.RegisterClipboardFormat("PNG")}
-_SAFE_FORMATS = _TEXT_FORMATS | _IMAGE_FORMATS
-
-# The same three formats password managers use to keep secrets out of
-# Windows Clipboard History and Cloud Clipboard sync. Nothing we put on the
-# clipboard should persist anywhere beyond the one paste it's for - dictation
-# stays local per CLAUDE.md.
-_EXCLUDE_FORMATS = [win32clipboard.RegisterClipboardFormat(name) for name in (
-    "ExcludeClipboardContentFromMonitorProcessing",
-    "CanIncludeInClipboardHistory",
-    "CanUploadToCloudClipboard")]
-
-# Guards on both sides so "uh-huh" survives. The surrounding commas exist
-# because of the filler pause, so they go with it ("should, uh, remove" ->
-# "should remove").
-_FILLER = re.compile(r",?\s*(?<![\w-])(?:um+|uh+|erm|hmm+)(?![\w-]),?\s*", re.IGNORECASE)
-# Unlike um/uh, "you know" is also a real phrase ("do you know..."), so it's
-# only stripped when a comma marks it as the spoken pause ("the store, you
-# know, and milk" -> "the store and milk"). Bare "you know" with no comma on
-# either side is left alone - misses some filler uses, but a false strip
-# ("do you know" -> "do") is worse than a miss. A comma before it isn't
-# enough on its own when a question word follows: "we're good, you know what
-# I mean?" is the fixed phrase, not the filler (pasted as "good what I mean?"
-# on 2026-09-01), so that form only strips with a comma after it too.
-_YOU_KNOW = re.compile(
-    r",\s*you know\s*,\s*"
-    r"|,\s*you know\b(?!\s+(?:what|how|that|if|where|when|why|who|the|this|it|i)\b)\s*"
-    r"|(?<![\w-])you know\s*,",
-    re.IGNORECASE)
-# Collapses an immediate stutter ("I I think", "the the box" -> "I think",
-# "the box"). Keeps the first occurrence's own casing via the backreference.
-# No comma allowed between repeats on purpose: a comma is Whisper's own
-# signal of a spoken pause, which is how deliberate emphasis ("very, very
-# important") differs from a real stutter (words run together, no pause).
-# Residual trade-off: fast, no-pause emphasis ("very very important") still
-# collapses, since there's no punctuation to tell it apart from a stutter.
-# [\w'] rather than \w so contractions count: "let's let's work" sailed
-# through the old pattern (2026-09-01 log). Same class in _RUNAWAY_REPEAT.
-_STUTTER = re.compile(r"\b([\w']+)(?:\s+\1\b)+", re.IGNORECASE)
-# Whisper occasionally hallucinates one word repeated dozens of times with a
-# comma after each ("Xeon, Xeon, Xeon, ..." x73, 2026-08-28) - the commas make
-# it read as emphasis to _STUTTER, so it sailed through untouched. This
-# collapses 4+ exact repeats of the same word, comma-separated or not, down to
-# the first occurrence (keeping its casing via the backreference). Kept
-# separate from _STUTTER because a real spoken triple ("no, no, no",
-# 2026-08-25) is a confirmed legitimate case that must not be touched: the
-# whole log corpus tops out at 3x for real speech, and the only hallucination
-# seen was 73x, with nothing in between - so 4 is the threshold.
-_RUNAWAY_REPEAT = re.compile(r"\b([\w']+)\b(?:[\s,]+\1\b){3,}", re.IGNORECASE)
-
-
-def _collapse_runaway(m, protected):
-    # an emphasis_words.txt word is exempt here too, same as in _STUTTER -
-    # the speaker opted this word out of repeat-collapsing outright, and a
-    # run they asked for isn't a hallucination worth a warning
-    if m.group(1).lower() in protected:
-        return m.group(0)
-    log.warning("hallucinated repeat run: %r x%d collapsed to one",
-                m.group(1), len(re.split(r"[\s,]+", m.group(0))))
-    return m.group(1)
-
-
-# Drops a leading "and" that starts a sentence ("And I went" -> "I went"),
-# keeping whatever anchored the match (start of text, or ". ") so the next
-# word still gets capitalized below. "and" mid-sentence is left alone - it's
-# only the sentence-opening filler use that reads wrong in dictated text.
-# Sentence boundary shared by the two patterns below: end punctuation plus
-# whitespace, except the "." of an ellipsis (Whisper's trailing-off marker:
-# "probably... doesn't" is mid-sentence) or of a common abbreviation ("1050
-# a.m. this morning" pasted as "a.m. This morning", 2026-09-01).
-_SENT_END = r"(?<!\.\.)(?<![apAP]\.[mM])(?<!\be\.g)(?<!\bi\.e)(?<!\betc)(?<!\bvs)[.!?]\s+"
-_LEADING_AND = re.compile(rf"(^|{_SENT_END})and\b,?\s*", re.IGNORECASE)
-_SENTENCE_START = re.compile(rf"(^|{_SENT_END})([a-z])")
-_HISTORY_LINE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}\] (.*)$")
-
-
-class _GUITHREADINFO(ctypes.Structure):
-    _fields_ = [("cbSize", wt.DWORD), ("flags", wt.DWORD),
-                ("hwndActive", wt.HWND), ("hwndFocus", wt.HWND),
-                ("hwndCapture", wt.HWND), ("hwndMenuOwner", wt.HWND),
-                ("hwndMoveSize", wt.HWND), ("hwndCaret", wt.HWND),
-                ("rcCaret", wt.RECT)]
-
-
-def _gui_thread_info():
-    """GetGUIThreadInfo for the foreground thread, or None if the call failed."""
-    gti = _GUITHREADINFO()
-    gti.cbSize = ctypes.sizeof(gti)
-    if ctypes.windll.user32.GetGUIThreadInfo(0, ctypes.byref(gti)):
-        return gti
-    return None
-
-
-def caret_visible():
-    """True when the foreground window shows a system text caret - i.e. the
-    paste almost certainly landed in a real text field. Apps that draw their
-    own caret read as False, which errs toward showing the repaste offer."""
-    gti = _gui_thread_info()
-    return gti is not None and bool(gti.hwndCaret)
-
-
-_TERMINAL_CLASSES = {"CASCADIA_HOSTING_WINDOW_CLASS",  # Windows Terminal
-                     "ConsoleWindowClass"}             # conhost/cmd
-
-
-def is_terminal():
-    """Windows Terminal and conhost draw their own cursor and expose the
-    buffer as a Document/Pane to UI Automation, so caret_visible() and
-    focused_editable() both read False here even though a Ctrl+V into a
-    console always lands at the input line - no read-only case to miss,
-    unlike a webpage."""
-    buf = ctypes.create_unicode_buffer(256)
-    ctypes.windll.user32.GetClassNameW(ctypes.windll.user32.GetForegroundWindow(), buf, 256)
-    return buf.value in _TERMINAL_CLASSES
-
-
-_uia = None
-
-
-def _get_uia():
-    global _uia
-    if _uia is None:
-        import comtypes
-        import comtypes.client
-        comtypes.CoInitialize()
-        comtypes.client.GetModule("UIAutomationCore.dll")
-        from comtypes.gen import UIAutomationClient as UIA
-        _uia = comtypes.client.CreateObject(UIA.CUIAutomation,
-                                            interface=UIA.IUIAutomation)
-    return _uia
-
-
-def focused_editable():
-    """UI Automation check for apps that draw their own caret (Electron,
-    Chromium): is the focused control an Edit field? Only Edit counts -
-    Document would also match read-only web pages, and a wrong True here
-    hides the repaste offer exactly when it's needed."""
-    try:
-        el = _get_uia().GetFocusedElement()
-        ct = el.CurrentControlType
-        log.debug("focused control type: %d", ct)
-        return ct == 50004  # UIA_EditControlTypeId
-    except Exception:
-        log.debug("UIA focus check failed", exc_info=True)
-        return False
-
-
-def focused_text():
-    """Full text of the focused control (TextPattern first, ValuePattern as
-    the fallback), or None when it exposes neither - the caller's signal to
-    fall back to the blind same-window heuristic. Probed 2026-08-25: every
-    field Uriah dictates into (Claude desktop, Firefox chrome + web content,
-    Gmail compose, Notepad) answers via TextPattern."""
-    try:
-        from comtypes.gen import UIAutomationClient as UIA
-        el = _get_uia().GetFocusedElement()
-        pat = el.GetCurrentPattern(10014)  # UIA_TextPatternId
-        if pat:
-            return pat.QueryInterface(
-                UIA.IUIAutomationTextPattern).DocumentRange.GetText(-1)
-        pat = el.GetCurrentPattern(10002)  # UIA_ValuePatternId
-        if pat:
-            return pat.QueryInterface(
-                UIA.IUIAutomationValuePattern).CurrentValue
-    except Exception:
-        log.debug("UIA text read failed", exc_info=True)
-    return None
-
-
-# GUI_INMENUMODE | GUI_SYSTEMMENUMODE | GUI_POPUPMENUMODE (winuser.h)
-_GUI_MENU_FLAGS = 0x0004 | 0x0008 | 0x0010
-_MENU_CONTROL_TYPES = {50009, 50010, 50011}  # UIA Menu, MenuBar, MenuItem
-
-
-def paste_blocked():
-    """True while a popup menu owns input on the foreground thread - an
-    injected Ctrl+V would go to the menu, not the text field, and a stray
-    'v' can even activate a menu item. Native Win32 menus (Notepad,
-    Explorer, Electron apps) run a modal loop that sets the menu-mode
-    flags; Chromium and Firefox draw their own menu popups, which hold
-    mouse capture (that's how they dismiss on an outside click) and report
-    a menu-ish focused element via UI Automation."""
-    gti = _gui_thread_info()
-    if gti is not None and (gti.flags & _GUI_MENU_FLAGS or gti.hwndCapture):
-        return True
-    try:
-        return _get_uia().GetFocusedElement().CurrentControlType in _MENU_CONTROL_TYPES
-    except Exception:
-        return False
 
 
 class Status:
@@ -395,188 +106,6 @@ class Status:
     @property
     def transcribing(self):
         return self._transcribing
-
-
-def _proper_nouns(prompt, corrections_path):
-    """Capitalized words from the Whisper prompt and corrections.txt targets:
-    the names join_segments must not lowercase."""
-    words = set(re.findall(r"[A-Z][A-Za-z']*", prompt or ""))
-    try:
-        for line in Path(corrections_path).read_text(encoding="utf-8").splitlines():
-            if "=" in line and not line.lstrip().startswith("#"):
-                words.update(re.findall(r"[A-Z][A-Za-z']*", line.split("=", 1)[1]))
-    except OSError:
-        pass
-    return words
-
-
-def join_segments(segments, proper):
-    """Join the batched pipeline's chunks into one text. Each chunk is decoded
-    on its own, so a chunk cut mid-sentence ends without punctuation (often
-    with a trailing "...") and the next starts with a capital as if it were
-    a new sentence. In a 586-join replay every such join was a continuation
-    (2026-09-02), so drop the cut ellipsis and lowercase the next chunk's
-    first word, except I/I'm-style words, proper nouns, and anything with a
-    capital past the first letter (YouTube, GPU)."""
-    texts = [t.strip() for t in segments if t.strip()]
-    # a word Whisper capitalized mid-sentence anywhere in this dictation is a
-    # name too (Windows, Thursday), whether or not the prompt knows it
-    proper = proper | {w for t in texts
-                       for w in re.findall(r"(?<=[^.!?] )[A-Z][a-z']+", t)}
-    out = []
-    for text in texts:
-        if out:
-            prev = re.sub(r"(?:\.\.\.|…)$", "", out[-1]).rstrip()
-            if not re.search(r"[.!?]['\")]*$", prev):
-                out[-1] = prev
-                m = re.match(r"([A-Z][a-z']*)\b", text)
-                word = m.group(1).removesuffix("'s") if m else "I"
-                if word != "I" and not word.startswith("I'") and word not in proper:
-                    text = word[0].lower() + text[1:]
-        out.append(text)
-    return " ".join(out)
-
-
-def clean_text(text, corrections_path, emphasis_path):
-    text = _FILLER.sub(" ", text)  # single space, collapsed below
-    text = _YOU_KNOW.sub(" ", text)
-    # emphasis_words.txt is re-read each job, same as corrections.txt, so a
-    # word added mid-session takes effect without a restart. A word on this
-    # list is never collapsed by _STUTTER or _RUNAWAY_REPEAT, comma or not -
-    # the speaker said outright that this word gets doubled on purpose.
-    protected = set()
-    try:
-        for line in Path(emphasis_path).read_text(encoding="utf-8").splitlines():
-            word = line.strip()
-            if word and not word.startswith("#"):
-                protected.add(word.lower())
-    except OSError:
-        pass
-    # before _STUTTER on purpose: it needs to see the full run, or _STUTTER
-    # collapsing any comma-free pairs inside a mixed run first could shrink
-    # it below the 4x threshold
-    text = _RUNAWAY_REPEAT.sub(lambda m: _collapse_runaway(m, protected), text)
-    text = _STUTTER.sub(
-        lambda m: m.group(0) if m.group(1).lower() in protected else m.group(1),
-        text)
-    text = re.sub(r"\s+", " ", text).strip()
-    # only punctuation that ends a token: "the .venv file" must not become
-    # "the.venv file" (2026-09-01)
-    text = re.sub(r"\s+([.,!?;])(?=\s|$)", r"\1", text)
-    text = _LEADING_AND.sub(lambda m: m.group(1), text)
-    text = _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
-    # corrections.txt is re-read each job so edits apply without a restart
-    try:
-        for line in Path(corrections_path).read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            wrong, right = line.split("=", 1)
-            replacement = right.strip()
-            # lambda repl: right-hand side is literal text, never a regex
-            # backreference template (a bare "\1" or "\t" would otherwise
-            # corrupt output or raise re.error and break every dictation)
-            text = re.sub(rf"\b{re.escape(wrong.strip())}\b",
-                          lambda m: replacement, text, flags=re.IGNORECASE)
-    except OSError:
-        pass
-    # Whisper itself puts a period on short fragments ("Outdoor camping."),
-    # which reads wrong in search boxes and titles. Strip it when the text
-    # is short and has no other sentence punctuation; real sentences keep it.
-    if (text.endswith(".") and len(text.split()) <= 5
-            and not re.search(r"[.!?]", text[:-1])):
-        text = text[:-1]
-    return text
-
-
-class Clipboard:
-    def __init__(self, cfg):
-        p = cfg["paste"]
-        self.retries = p["clipboard_retries"]
-        self.retry_s = p["clipboard_retry_ms"] / 1000
-        self.restore_delay = p["restore_delay_ms"] / 1000
-        self.kb = Controller()
-
-    def _open(self):
-        # OpenClipboard routinely loses races against clipboard managers
-        for _ in range(self.retries):
-            try:
-                win32clipboard.OpenClipboard()
-                return True
-            except pywintypes.error:
-                time.sleep(self.retry_s)
-        return False
-
-    def _mark_transient(self):
-        """Call with the clipboard already open, right after writing to it."""
-        zero = struct.pack("i", 0)
-        for fmt in _EXCLUDE_FORMATS:
-            win32clipboard.SetClipboardData(fmt, zero)
-
-    def _replace_clipboard(self, populate):
-        """Call with the clipboard already open: clears it, lets populate()
-        write the new contents, then marks the result transient - including
-        a restored prior clipboard, so putting it back doesn't create a
-        fresh history entry for it."""
-        win32clipboard.EmptyClipboard()
-        populate()
-        self._mark_transient()
-
-    def _write_text(self, text):
-        self._replace_clipboard(
-            lambda: win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT))
-
-    def paste(self, text):
-        if not self._open():
-            log.error("clipboard busy, dropping paste: %r", text[:80])
-            return None
-        saved = {}
-        restorable = False
-        try:
-            formats, f = [], 0
-            while (f := win32clipboard.EnumClipboardFormats(f)):
-                formats.append(f)
-            has_text = any(fmt in _TEXT_FORMATS for fmt in formats)
-            restorable = not (has_text and not all(fmt in _SAFE_FORMATS for fmt in formats))
-            if restorable:
-                saved = {fmt: win32clipboard.GetClipboardData(fmt)
-                         for fmt in formats if fmt in _SAFE_FORMATS}
-                if formats and not saved:
-                    # nothing we can safely carry forward (e.g. a copied
-                    # file) - leave the dictated text rather than wipe
-                    # the clipboard to empty
-                    restorable = False
-            self._write_text(text)
-        finally:
-            win32clipboard.CloseClipboard()
-
-        # A physically held modifier would corrupt the Ctrl+V chord
-        for mod in (Key.ctrl, Key.shift, Key.alt):
-            self.kb.release(mod)
-        with self.kb.pressed(Key.ctrl):
-            self.kb.tap("v")
-        # the user has their text from here on; returned so the job line's
-        # paste= timing stops at the keystroke, not the restore sleep
-        sent = time.monotonic()
-
-        # No signal exists for "paste consumed"; the delay is the honest fix
-        time.sleep(self.restore_delay)
-        if restorable and self._open():
-            try:
-                def restore():
-                    for fmt, data in saved.items():
-                        win32clipboard.SetClipboardData(fmt, data)
-                self._replace_clipboard(restore)
-            finally:
-                win32clipboard.CloseClipboard()
-        return sent
-
-    def set_text(self, text):
-        if self._open():
-            try:
-                self._write_text(text)
-            finally:
-                win32clipboard.CloseClipboard()
 
 
 def normalize(audio, target_peak):
@@ -643,6 +172,9 @@ def _warm_model(model):
     segs, _ = model.transcribe(np.zeros(16000, dtype=np.float32),
                                language="en", vad_filter=False)
     list(segs)
+
+
+_HISTORY_LINE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}\] (.*)$")
 
 
 class Transcriber(threading.Thread):
@@ -981,7 +513,7 @@ class Transcriber(threading.Thread):
                 # Terminals never stitch (a period would corrupt a command)
                 # and skip the read: their UIA text is the whole viewport,
                 # not the input line.
-                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                hwnd = foreground_window()
                 terminal = is_terminal()
                 field = None if terminal else focused_text()
                 stitch = False

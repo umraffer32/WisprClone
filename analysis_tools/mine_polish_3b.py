@@ -9,14 +9,11 @@ killed dolphin - 71% returned-unchanged vs qwen 7b's 31%), then
 mine_polish.check()'s flag rules on every edit, then per-call latency, since
 speed is the only reason to consider the smaller model at all.
 
-POLISH_PROMPT is parsed out of transcribe.py's source rather than imported -
-importing transcribe drags in faster_whisper/CUDA this script doesn't need.
 max_ratio and timeout_s come from config.toml so they can't drift from the
 live values. Per-call failures are counted and skipped, never fatal.
 """
 
-import ast
-import re
+import sys
 import time
 import tomllib
 from collections import Counter
@@ -25,7 +22,9 @@ from statistics import median
 
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent.parent))  # polish.py lives in the repo root
 from mine_polish import check, load_pairs
+from polish import POLISH_PROMPT
 
 BASE = Path(__file__).parent.parent
 MODEL = "qwen2.5:3b-instruct"
@@ -34,19 +33,9 @@ _s = requests.Session()
 _s.trust_env = False
 
 
-def polish_prompt():
-    """POLISH_PROMPT's value, parsed from transcribe.py's source text."""
-    src = (BASE / "transcribe.py").read_text(encoding="utf-8")
-    m = re.search(r"^POLISH_PROMPT = (\(.*?\n\))", src, re.S | re.M)
-    if not m:
-        raise SystemExit("POLISH_PROMPT not found in transcribe.py")
-    return ast.literal_eval(m.group(1))
-
-
 def main():
     with open(BASE / "config.toml", "rb") as f:
         p = tomllib.load(f)["polish"]
-    prompt = polish_prompt()
     paths = [q for q in (BASE / "wisprclone.log.1", BASE / "wisprclone.log")
              if q.exists()]
     if not paths:
@@ -80,7 +69,7 @@ def main():
         try:
             r = _s.post("http://127.0.0.1:11434/api/generate", json={
                 "model": MODEL, "stream": False, "keep_alive": "24h",
-                "prompt": prompt + raw,
+                "prompt": POLISH_PROMPT + raw,
                 "options": {"temperature": 0, "num_ctx": 8192,
                             "num_predict": max(64, int(len(raw) / 4 * p["max_ratio"]))},
             }, timeout=p["timeout_s"])
