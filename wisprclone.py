@@ -381,9 +381,7 @@ def main():
         with sm.lock:
             stopping = sm.state != IDLE
             if stopping:
-                recorder.stop_recording(
-                    discard=recorder.recording_seconds < sm.min_s)
-                sm.state = IDLE
+                sm._stop_recording()
         if stopping:
             time.sleep(0.1)  # two callback periods for the buffer handoff
         deadline = time.monotonic() + 10

@@ -513,11 +513,18 @@ class Clipboard:
         for fmt in _EXCLUDE_FORMATS:
             win32clipboard.SetClipboardData(fmt, zero)
 
-    def _write_text(self, text):
-        """Call with the clipboard already open: replaces its contents."""
+    def _replace_clipboard(self, populate):
+        """Call with the clipboard already open: clears it, lets populate()
+        write the new contents, then marks the result transient - including
+        a restored prior clipboard, so putting it back doesn't create a
+        fresh history entry for it."""
         win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+        populate()
         self._mark_transient()
+
+    def _write_text(self, text):
+        self._replace_clipboard(
+            lambda: win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT))
 
     def paste(self, text):
         if not self._open():
@@ -556,12 +563,10 @@ class Clipboard:
         time.sleep(self.restore_delay)
         if restorable and self._open():
             try:
-                win32clipboard.EmptyClipboard()
-                for fmt, data in saved.items():
-                    win32clipboard.SetClipboardData(fmt, data)
-                # marked transient too, so restoring the user's own prior
-                # clipboard doesn't create a fresh history entry for it
-                self._mark_transient()
+                def restore():
+                    for fmt, data in saved.items():
+                        win32clipboard.SetClipboardData(fmt, data)
+                self._replace_clipboard(restore)
             finally:
                 win32clipboard.CloseClipboard()
         return sent

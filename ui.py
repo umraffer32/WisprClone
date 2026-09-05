@@ -368,10 +368,11 @@ class Pill:
         """The pill's own silhouette blurred into the padding, breathing on
         the pulse clock. Floor of 120 keeps a visible ring at the dim end of
         the cycle - it breathes, never vanishes."""
+        S = _S
         ImageDraw.Draw(img).rounded_rectangle(
-            pill, radius=_RADIUS * _S,
+            pill, radius=_RADIUS * S,
             fill=(195, 238, 255, int(120 + 135 * self._glow)))
-        return img.filter(ImageFilter.GaussianBlur((2.5 + 3.5 * self._glow) * _S))
+        return img.filter(ImageFilter.GaussianBlur((2.5 + 3.5 * self._glow) * S))
 
     def _draw_vignette(self, img):
         """Interior vignette: a cold-blue radial lift at the center that
