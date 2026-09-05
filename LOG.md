@@ -3,6 +3,39 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-05 — Clean-code pass on the four core app files (branch: code-cleanup)
+
+Uriah asked for a readability pass against his own clean-code conventions,
+dispatched as a single Fable agent at max reasoning depth, worktree-isolated,
+scoped to wisprclone.py/audio.py/transcribe.py/ui.py only. Net +190/-173
+lines, not a size reduction: dedup and Extract-Method naturally add a few
+lines even while removing duplication. Collapsed three copy-pasted
+stream-teardown blocks in `Recorder` into one `_release_stream()`, split
+`Pill._render()`'s four unrelated drawing paths into per-state helpers,
+deduped the `GetGUIThreadInfo` ctypes call and the model-warmup sequence in
+transcribe.py, dropped a few genuinely dead bits (`resolve_ptt`'s unused
+pynput object, `WM_KEYUP`, duplicate imports in three `__main__` self-tests),
+and fixed two comments still describing polish as toggle-mode-only when it's
+been duration-gated and mode-agnostic for a while. One disclosed,
+verified-inert behavior delta: `Recorder.close()` now also nulls
+`self._stream` afterward (traced every call site - nothing reads it after
+`close()`). Committed `daaf708`, live-tested (one PTT dictation, one
+toggle-mode dictation, pill rendered fine) and confirmed good.
+
+A follow-up `/code-review` at max effort (10 finder angles, one-vote verify,
+gap sweep) found 4 real findings: the new dedup helpers weren't reused
+everywhere they could have been, in transcribe.py's clipboard-restore branch
+and in wisprclone.py's `teardown()`; the commit subject wasn't imperative
+(fixed via `git commit --amend`, `daaf708` -> `dea6fbe`); and ui.py's four
+new draw methods had one cosmetic alias inconsistency. Two other candidates
+(an audio.py flag-argument style nit, a ui.py function over the line-count
+guideline) were raised but refuted on verify as defensible trade-offs and
+correctly dropped. All four real findings fixed same day, py_compile clean.
+The three code fixes (transcribe.py, wisprclone.py, ui.py) are still
+uncommitted, pending a live restart - they touch the clipboard-restore path
+and the shutdown path, neither of which the two dictations above happened to
+exercise.
+
 ## 2026-09-04 — Canary-1B bake-off: rejected, but breaks part of the pattern
 
 Fourth bake-off the same day. Plain `nvidia/canary-1b` (NeMo
