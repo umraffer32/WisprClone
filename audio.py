@@ -96,7 +96,7 @@ class Ducker(threading.Thread):
 
 class Cue:
     """Plays Wispr Flow's own start/stop clips (sounds/dictation-start.wav,
-    sounds/dictation-stop.wav - see SETUP.md) through winsound, so there's
+    sounds/dictation-stop.wav - see docs/SETUP.md) through winsound, so there's
     no per-cue device open (50-300ms on this machine) and no blocking on
     the caller's thread. Not ducked: PlaySound goes straight to the default
     output device, bypassing the Ducker.

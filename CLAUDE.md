@@ -82,6 +82,8 @@ onboarding work unless explicitly asked.
   per offline test (newest first) with the full tables, where LOG.md keeps
   only the decision. Each dated subfolder holds that day's data and
   scripts, gitignored since the data quotes dictations.
+- `docs/` — `LOG.md` (commit-keyed change log), `BUGS.md` (incident
+  history), `SETUP.md` (build-your-own walkthrough).
 
 ## Launching and restarting — read before touching a running instance
 
@@ -127,7 +129,7 @@ a failed polish must never lose a dictation). Always address it as
 - Config knobs belong in config.toml; internal sanity thresholds stay in code.
 - clean_text() regexes are one-quirk-per-pattern; check the polish pass
   before adding another.
-- Docs (CLAUDE.md, README.md, SETUP.md) must stay consistent with the code
+- Docs (CLAUDE.md, README.md, docs/SETUP.md) must stay consistent with the code
   on every push — check before pushing, fix in the same commit, never a
   later cleanup pass. This has failed twice: once by searching a commit's
   own vocabulary instead of the *category* it belongs to (search "guard,"
