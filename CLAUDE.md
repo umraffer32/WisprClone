@@ -44,7 +44,8 @@ onboarding work unless explicitly asked.
   writes as excluded from Clipboard History and cloud sync.
 - `focus.py` — where a paste would land, via Win32 and UI Automation:
   `foreground_window()`, `is_terminal()`, `caret_visible()`,
-  `focused_editable()`, `focused_text()`, `paste_blocked()`.
+  `focused_editable()`, `focused_text()`, `paste_blocked()`, plus
+  `needs_leading_space()`, the field-read rule both paste paths share.
 - `ui.py` — recording pill overlay (draggable; position persists in the
   gitignored `pill_pos.txt`; `Anchor` thread re-centers it under the
   Claude Code compose box via UI Automation while that app is in front)

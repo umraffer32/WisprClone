@@ -50,7 +50,8 @@ from cleanup import (_FILLER, _RUNAWAY_REPEAT, _STUTTER, _proper_nouns,
                      clean_text, join_segments)
 from clipboard import Clipboard
 from focus import (caret_visible, focused_editable, focused_text,
-                   foreground_window, is_terminal, paste_blocked)
+                   foreground_window, is_terminal, needs_leading_space,
+                   paste_blocked)
 from polish import POLISH_PROMPT, _GUARD_STOP, _SENT_SPLIT, _SWEARS, _lost_sentence
 
 # a machine-wide HTTP_PROXY would reroute the Ollama call (no automatic
@@ -527,20 +528,17 @@ class Transcriber(threading.Thread):
                                   < self.continuation_gap_s)
                     log.info("continuation: %s stitch=%s",
                              "field-read" if field is not None else "blind", stitch)
-                # The same field read decides the leading space: pasting
-                # after existing content needs one so words don't run
-                # together, but an empty field - or one already ending in
-                # whitespace - doesn't. Keying this off "first dictation
-                # since launch" instead put a stray space at the start of
-                # every fresh chat box (reported 2026-08-27). An unreadable
-                # field keeps the space: a stray space is invisible and
-                # send boxes trim it, glued words corrupt the dictation.
+                # The same field read decides the leading space (the rule
+                # itself lives in focus.needs_leading_space, shared with
+                # the pill's repaste). Keying it off "first dictation since
+                # launch" instead put a stray space at the start of every
+                # fresh chat box (reported 2026-08-27).
                 if stitch:
                     joined = ". " + text
-                elif field is not None and (not field or field[-1].isspace()):
-                    joined = text
-                else:
+                elif needs_leading_space(field):
                     joined = " " + text
+                else:
+                    joined = text
 
                 if pastable:
                     t3 = self.clipboard.paste(joined)

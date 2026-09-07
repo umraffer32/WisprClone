@@ -7,6 +7,23 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-07 — Click-to-repaste inserted a leading space
+
+Symptom: clicking the pill to repaste a dictation that missed its target
+put a space in front of the text, even when the box was empty. Reported
+after a real miss, with the pasted line quoted back showing the space. Root
+cause: `repaste_last()` in wisprclone.py built `" " + status.last_text`
+unconditionally. The main paste path had the same bug on 2026-08-27 and was
+fixed then by reading the focused field and only adding the space when
+there was existing content to run into; the pill's handler kept its own
+copy of the old behavior and nothing tied the two together. Fix: the
+decision moved into `focus.needs_leading_space()`, called by both paths,
+and the repaste reads the focused field itself before pasting. `_get_uia()`
+became thread-local in the same change, since the cached UIA client and its
+`CoInitialize` belonged to the transcriber thread and the repaste read runs
+on the tk main thread. Status: fixed and confirmed live. See LOG.md
+2026-09-07.
+
 ## 2026-09-05 — Worktree dispatch silently based itself on a stale commit
 
 Symptom: the first worktree-isolated dispatch for the transcribe.py split

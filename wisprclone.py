@@ -136,6 +136,7 @@ def main():
         return
 
     from audio import Cue, Ducker, Recorder
+    from focus import focused_text, is_terminal, needs_leading_space
     from transcribe import Status, Transcriber
     from ui import Pill, make_tray
 
@@ -247,11 +248,20 @@ def main():
 
     def repaste_last():
         status.result_until = 0.0  # click registered: hide the offer
-        if status.last_text:
-            # manual re-aim: don't presume where this lands, just avoid
-            # gluing onto whatever's already there
-            threading.Thread(target=clipboard.paste,
-                             args=(" " + status.last_text,), daemon=True).start()
+        if not status.last_text:
+            return
+        # Same leading-space rule as the first paste, off a fresh field
+        # read - the pill is NOACTIVATE, so the target still holds focus
+        # at click time. Prepending a space unconditionally put one at the
+        # start of every repaste into an empty box (reported 2026-09-07).
+        # Terminals skip the read for the reason the first paste does:
+        # their UIA text is the whole viewport, not the input line.
+        field = None if is_terminal() else focused_text()
+        text = status.last_text
+        if needs_leading_space(field):
+            text = " " + text
+        threading.Thread(target=clipboard.paste,
+                         args=(text,), daemon=True).start()
 
     def dismiss_result():
         status.result_until = 0.0  # X clicked: hide without repasting

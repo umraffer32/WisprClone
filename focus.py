@@ -4,6 +4,7 @@ through Win32 and UI Automation."""
 import ctypes
 import ctypes.wintypes as wt
 import logging
+import threading
 
 log = logging.getLogger("wisprclone")
 
@@ -58,20 +59,23 @@ def is_terminal():
     return buf.value in _TERMINAL_CLASSES
 
 
-_uia = None
+# per thread: a UIA client belongs to the apartment that created it, and
+# CoInitialize is per-thread too. The transcriber thread built the only
+# client until the pill's repaste started reading the field from the tk
+# main thread (2026-09-07).
+_uia = threading.local()
 
 
 def _get_uia():
-    global _uia
-    if _uia is None:
+    if getattr(_uia, "client", None) is None:
         import comtypes
         import comtypes.client
         comtypes.CoInitialize()
         comtypes.client.GetModule("UIAutomationCore.dll")
         from comtypes.gen import UIAutomationClient as UIA
-        _uia = comtypes.client.CreateObject(UIA.CUIAutomation,
-                                            interface=UIA.IUIAutomation)
-    return _uia
+        _uia.client = comtypes.client.CreateObject(UIA.CUIAutomation,
+                                                   interface=UIA.IUIAutomation)
+    return _uia.client
 
 
 def focused_editable():
@@ -109,6 +113,15 @@ def focused_text():
     except Exception:
         log.debug("UIA text read failed", exc_info=True)
     return None
+
+
+def needs_leading_space(field):
+    """True when a paste into `field` (as read by focused_text()) needs a
+    space in front of it so the words don't run together with what's
+    already there. An empty field, or one already ending in whitespace,
+    doesn't. An unreadable field (None) keeps the space: a stray space is
+    invisible and send boxes trim it, glued words corrupt the dictation."""
+    return field is None or (bool(field) and not field[-1].isspace())
 
 
 # GUI_INMENUMODE | GUI_SYSTEMMENUMODE | GUI_POPUPMENUMODE (winuser.h)

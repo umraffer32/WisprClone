@@ -3,6 +3,26 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-07 — The pill's repaste gets the same leading-space rule
+
+The click-to-repaste offer always pasted `" " + text`, so every repaste
+into an empty box started with a stray space. The normal paste stopped
+doing that on 2026-08-27 by reading the focused field first, but the pill's
+handler was never brought along. The rule now lives in one place,
+`focus.needs_leading_space()`, and both paths call it; the repaste does its
+own field read at click time, which works because the pill is NOACTIVATE
+and the target still owns focus.
+
+`_get_uia()` had to become thread-local for that read to happen at all. It
+cached one UIA client on whichever thread asked first, the transcriber, and
+`CoInitialize` is per-thread. Called from the tk main thread it would very
+likely have raised, been swallowed by `focused_text()`'s except, and
+returned None, which adds the space back. The fix would have looked like it
+worked and changed nothing.
+
+Confirmed live: dictate, click off the field, click the pill, no leading
+space.
+
 ## 2026-09-06 — Code review of the whole code-cleanup branch, and its fixes
 
 Ran a max-effort review over the full branch against main (10 commits, a
