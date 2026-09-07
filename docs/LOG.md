@@ -23,6 +23,15 @@ worked and changed nothing.
 Confirmed live: dictate, click off the field, click the pill, no leading
 space.
 
+With that in, `code-cleanup` fast-forward merged into `main`
+(`c4add0a..5ae3d53`, 16 commits, no merge commit since main hadn't moved)
+and was deleted local and on origin. `main` is the only branch again. The
+branch had been held back deliberately since 2026-09-05 to see whether the
+readability pass and the transcribe.py split broke anything subtle in
+normal use; nothing turned up, and this bug argued for merging rather than
+against it - the stray space came from `repaste_last` holding its own stale
+copy of a rule the split otherwise makes visible in one place.
+
 ## 2026-09-06 — Code review of the whole code-cleanup branch, and its fixes
 
 Ran a max-effort review over the full branch against main (10 commits, a
@@ -201,8 +210,8 @@ The three code fixes (transcribe.py, wisprclone.py, ui.py) touched the
 clipboard-restore path and the shutdown path, neither of which the two
 dictations above happened to exercise, so they sat uncommitted until Uriah
 had used the app normally for a few days and confirmed it still felt right.
-Committed `a04a369`. `code-cleanup` is not yet merged to main - his call,
-once he's sat with it a bit longer.
+Committed `a04a369`. `code-cleanup` sat unmerged for a couple more days at
+Uriah's request, then went to main on 2026-09-07 (see that entry).
 
 ## 2026-09-04 — Canary-1B bake-off: rejected, but breaks part of the pattern
 
