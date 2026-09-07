@@ -56,12 +56,13 @@ def print_corpus_breakdown(recs):
 
 def print_gap_distribution(gap_lists):
     all_gaps = [g for gaps in gap_lists for g in gaps]
-    if not all_gaps:
-        print("  no gaps found in the long-dictation subset")
+    # quantiles() needs two points, so a one-gap corpus can't be described
+    if len(all_gaps) < 2:
+        print(f"  too few gaps to describe ({len(all_gaps)})")
         return
     all_gaps.sort()
-    p75, p90, p95 = statistics.quantiles(all_gaps, n=100)[74], \
-        statistics.quantiles(all_gaps, n=100)[89], statistics.quantiles(all_gaps, n=100)[94]
+    qs = statistics.quantiles(all_gaps, n=100)
+    p75, p90, p95 = qs[74], qs[89], qs[94]
     print(f"  n gaps: {len(all_gaps)} across {len(gap_lists)} dictations")
     print(f"  min={min(all_gaps):.2f}s  median={statistics.median(all_gaps):.2f}s  "
           f"p75={p75:.2f}s  p90={p90:.2f}s  p95={p95:.2f}s  max={max(all_gaps):.2f}s")

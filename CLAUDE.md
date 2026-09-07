@@ -43,8 +43,8 @@ onboarding work unless explicitly asked.
   sends Ctrl+V, puts the prior contents back, and marks everything it
   writes as excluded from Clipboard History and cloud sync.
 - `focus.py` — where a paste would land, via Win32 and UI Automation:
-  `is_terminal()`, `caret_visible()`, `focused_editable()`,
-  `focused_text()`, `paste_blocked()`.
+  `foreground_window()`, `is_terminal()`, `caret_visible()`,
+  `focused_editable()`, `focused_text()`, `paste_blocked()`.
 - `ui.py` — recording pill overlay (draggable; position persists in the
   gitignored `pill_pos.txt`; `Anchor` thread re-centers it under the
   Claude Code compose box via UI Automation while that app is in front)
@@ -55,7 +55,7 @@ onboarding work unless explicitly asked.
   runaway-repeat regexes (comma or not), one per line, applied live (no
   restart).
 - `sounds/` — `dictation-start.wav` / `dictation-stop.wav`, Wispr Flow's own
-  cue clips (see SETUP.md for where to get them). Gitignored: not
+  cue clips (see docs/SETUP.md for where to get them). Gitignored: not
   redistributable. A missing or unreadable clip disables the cue and logs a
   warning instead of raising.
 - `history.log` — every pasted dictation, timestamped. Seeds the tray word

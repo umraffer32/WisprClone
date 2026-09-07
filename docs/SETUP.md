@@ -1,6 +1,6 @@
 # Setup
 
-This is exactly what I did to get WisprClone running on my own machine, in the order I did it, including the two Windows-specific pieces that took real trial and error to figure out. This isn't a general public install guide, see README.md's [Scope](README.md#scope) section for why, but it's accurate: if you're curious enough to build your own copy anyway, this covers it top to bottom.
+This is exactly what I did to get WisprClone running on my own machine, in the order I did it, including the two Windows-specific pieces that took real trial and error to figure out. This isn't a general public install guide, see README.md's [Scope](../README.md#scope) section for why, but it's accurate: if you're curious enough to build your own copy anyway, this covers it top to bottom.
 
 One thing worth flagging before you start: `[polish]` (the optional LLM cleanup pass) is off on my machine right now, a trial that's been running since 2026-09-01. The Ollama section below covers why. Everything else here is settled.
 

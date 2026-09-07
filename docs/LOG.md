@@ -72,8 +72,9 @@ filesystem grep, not just the imports already known about, and each
 verified in a fresh interpreter. CLAUDE.md's file map updated in the same
 commit. One real hiccup during the dispatch itself, not the code: the first
 worktree attempt silently based itself on a stale commit from several turns
-earlier instead of the actual branch tip, caught before it did any work -
-see [[worktree-dispatch-needs-pushed-branch]].
+earlier instead of the actual branch tip, caught before it did any work.
+The fix going forward: push the branch first, and have the dispatch prompt
+verify its own base commit as its first step.
 
 Committed `adc0efb`. Live-tested: PTT dictation (ducking, pill, start cue
 all fine), an extended toggle-mode dictation, and specifically the

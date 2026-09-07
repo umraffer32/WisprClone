@@ -20,8 +20,8 @@ from pathlib import Path
 
 import requests
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # transcribe.py lives in the repo root
-from transcribe import POLISH_PROMPT
+sys.path.insert(0, str(Path(__file__).parent.parent))  # polish.py lives in the repo root
+from polish import POLISH_PROMPT  # not transcribe: that drags in faster_whisper/CUDA
 
 BASE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
 _HISTORY_LINE = re.compile(r"^\[[^\]]+\] (.*)$")
