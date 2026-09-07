@@ -7,6 +7,28 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-05 — Worktree dispatch silently based itself on a stale commit
+
+Symptom: the first worktree-isolated dispatch for the transcribe.py split
+came up on a commit from several turns earlier, an old `main` state, rather
+than the branch tip it was told to work from. Nothing failed and nothing
+warned; the worktree just quietly held the wrong tree. Caught by inspection
+before the agent had done any work, so no bad code was written and nothing
+had to be thrown away. Root cause: the branch the work was meant to sit on
+had never been pushed, so the isolation had no remote ref to resolve and
+fell back to what it could see, an older `main`. The dispatch prompt asked
+for the work but never asked the agent to confirm where it had landed, so
+the mismatch had nothing to surface it. Fix: re-dispatched from a pushed
+branch. Process fix, and the more useful half: push the branch before
+dispatching, and make the dispatch prompt's mandatory first step a check
+that `git log` shows the expected base commit at HEAD, with instructions to
+stop and report a mismatch instead of working from the wrong tree. Checking
+afterward is too late; by then the agent has already built on the wrong
+base. Status: no code affected. The process fix is in use - the 2026-09-06
+paragraph-break mining dispatch ran that base-commit check as its first
+step and confirmed `c4add0a` before touching anything. See LOG.md
+2026-09-05 for the split itself.
+
 ## 2026-09-04 — Dispatched agent left a worktree and monitor running past completion
 
 Symptom: during the Granite Speech 4.1 2B bake-off, the dispatched agent
