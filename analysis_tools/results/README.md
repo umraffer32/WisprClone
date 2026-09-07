@@ -14,6 +14,65 @@ what the disagreements are. Whisper baselines always run through the live
 app path (`Transcriber.pipe` with the app's decode options and prompt;
 hotwords before 2026-09-02).
 
+## 2026-09-06 — Paragraph-break pause threshold
+
+Question: does pause length between speech segments in long (1-2 minute)
+toggle dictations support a clean threshold for inserting paragraph
+breaks? Read from vad_shadow.log's "300" bucket (finest Silero merge
+setting, so a gap between consecutive segments is a real measured pause
+of 0.3s or more), toggle mode only. Corpus: 1806 total records (428
+toggle, 1378 ptt); 75 toggle dictations at audio_s >= 30s, 35 at >= 45s
+(the long-dictation case this feature targets), 22 at >= 60s.
+
+| long dictations (audio_s >= 45s, n=35) | |
+|---|---:|
+| gaps found | 275 |
+| min | 0.35s |
+| median | 0.64s |
+| p75 | 0.96s |
+| p90 | 1.57s |
+| p95 | 2.49s |
+| max | 5.19s |
+
+Histogram: 30% of gaps land under 0.5s and 46% between 0.5-1s, so 76% of
+all pauses in a long dictation are under a second - ordinary breath gaps,
+not the kind of pause a topic change would produce. Only 12% of gaps sit
+above 1.5s (1.5-2s 5.5%, 2-2.5s 1.5%, 2.5-3s 2.2%, 3s+ 2.5%).
+
+| threshold | has any break | mean breaks/dictation | median breaks/dictation |
+|---|---:|---:|---:|
+| 1.00s | 49% | 1.89 | 0 |
+| 1.25s | 43% | 1.31 | 0 |
+| 1.50s | 37% | 0.91 | 0 |
+| 1.75s | 29% | 0.60 | 0 |
+| 2.00s | 23% | 0.49 | 0 |
+| 2.50s | 20% | 0.37 | 0 |
+| 3.00s | 11% | 0.20 | 0 |
+
+Every threshold from 1.0s to 3.0s has a median of zero qualifying gaps
+per dictation. Fewer than half the long dictations ever cross even the
+lowest threshold tested, and the mean sitting above zero is a handful of
+dictations with several long gaps pulling the average up, not a
+consistent pattern across the set. Spot-checked the 8 longest dictations
+that actually carry "300" data (253 of 1806 records predate that
+bucket and were excluded; the true longest clips in the corpus, 90-180s
+from 2026-08-24/25, only logged 500/700/1000ms buckets and have no
+usable gap list). Most gaps in those 8 cluster in the 0.3-1.5s range
+with an occasional 2-5s outlier, and nothing in the raw numbers
+distinguishes a topic-change pause from a mid-thought breath - an
+outlier gap is as likely to sit next to another gap a half-second away
+as to stand alone.
+
+Call: the data doesn't support a clean threshold. No candidate from
+1.0-3.0s produces a break in a majority of long dictations, and even
+where one fires, the shape (median 0, mean under 2) means most
+dictations would get zero or one break rather than the several splits a
+1-2 minute recording would need to read as more than one flat
+paragraph. The corpus is also thin at this length (35 toggle dictations
+>= 45s, 22 at >= 60s) for calling a threshold with confidence either
+way. Script: `mine_paragraph_breaks.py`, output:
+`2026-09-06-paragraph-breaks/output.txt`.
+
 ## 2026-09-04 — Canary-1B vs large-v3-turbo
 
 1274 clips (turbo's current full corpus; the retained corpus itself grew to
