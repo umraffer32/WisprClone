@@ -159,6 +159,7 @@ class Recorder:
         self.status = status
         self.level = 0.0
         self.last_block_ts = time.monotonic()
+        self._reopen_lock = threading.Lock()
         self.want_recording = False
         self.discard_next = False
         self.mode = "ptt"
@@ -278,15 +279,20 @@ class Recorder:
         PortAudio freezes its device list at init, so a full re-init is the
         only way to see a new default mic. sounddevice's _terminate/_initialize
         are private API - acceptable with the version pinned.
+
+        Serialized: the tick thread's stale-stream watchdog and the tray
+        thread's "Reconnect mic" can both land here, and _terminate/_initialize
+        are process-global and not reentrant.
         """
-        self._release_stream(abort=True)
-        try:
-            sd._terminate()
-            sd._initialize()
-            self.open()
-        except Exception:
-            self.status.mic_ok = False
-            raise
+        with self._reopen_lock:
+            self._release_stream(abort=True)
+            try:
+                sd._terminate()
+                sd._initialize()
+                self.open()
+            except Exception:
+                self.status.mic_ok = False
+                raise
 
     def close(self):
         self._release_stream()

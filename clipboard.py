@@ -2,6 +2,7 @@
 
 import logging
 import struct
+import threading
 import time
 
 import pywintypes
@@ -41,6 +42,12 @@ class Clipboard:
         self.retry_s = p["clipboard_retry_ms"] / 1000
         self.restore_delay = p["restore_delay_ms"] / 1000
         self.kb = Controller()
+        # Three threads reach this one instance: the Transcriber worker, the
+        # thread a repaste click spawns, and pystray's for "Re-copy last".
+        # Held across the whole save/write/paste/restore sequence on purpose -
+        # a second paste starting mid-sequence would save our own text as the
+        # "prior" clipboard and restore that instead of the user's.
+        self._lock = threading.Lock()
 
     def _open(self):
         # OpenClipboard routinely loses races against clipboard managers
@@ -64,14 +71,23 @@ class Clipboard:
         a restored prior clipboard, so putting it back doesn't create a
         fresh history entry for it."""
         win32clipboard.EmptyClipboard()
-        populate()
-        self._mark_transient()
+        try:
+            populate()
+        finally:
+            # even on a failed write: whatever did land must not reach
+            # Clipboard History, and on the restore path that's the user's
+            # own prior clipboard
+            self._mark_transient()
 
     def _write_text(self, text):
         self._replace_clipboard(
             lambda: win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT))
 
     def paste(self, text):
+        with self._lock:
+            return self._paste(text)
+
+    def _paste(self, text):
         if not self._open():
             log.error("clipboard busy, dropping paste: %r", text[:80])
             return None
@@ -117,6 +133,10 @@ class Clipboard:
         return sent
 
     def set_text(self, text):
+        with self._lock:
+            self._set_text(text)
+
+    def _set_text(self, text):
         if self._open():
             try:
                 self._write_text(text)

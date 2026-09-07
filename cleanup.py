@@ -77,8 +77,11 @@ def _proper_nouns(prompt, corrections_path):
         for line in Path(corrections_path).read_text(encoding="utf-8").splitlines():
             if "=" in line and not line.lstrip().startswith("#"):
                 words.update(re.findall(r"[A-Z][A-Za-z']*", line.split("=", 1)[1]))
+    except FileNotFoundError:
+        pass  # no corrections file yet is the normal case
     except OSError:
-        pass
+        log.warning("corrections.txt unreadable; proper nouns from it will be "
+                    "missing this job", exc_info=True)
     return words
 
 
@@ -122,8 +125,11 @@ def clean_text(text, corrections_path, emphasis_path):
             word = line.strip()
             if word and not word.startswith("#"):
                 protected.add(word.lower())
+    except FileNotFoundError:
+        pass  # no emphasis file yet is the normal case
     except OSError:
-        pass
+        log.warning("emphasis_words.txt unreadable; repeat-collapse "
+                    "exemptions skipped this job", exc_info=True)
     # before _STUTTER on purpose: it needs to see the full run, or _STUTTER
     # collapsing any comma-free pairs inside a mixed run first could shrink
     # it below the 4x threshold
@@ -144,14 +150,24 @@ def clean_text(text, corrections_path, emphasis_path):
             if not line or line.startswith("#") or "=" not in line:
                 continue
             wrong, right = line.split("=", 1)
-            replacement = right.strip()
+            wrong, replacement = wrong.strip(), right.strip()
+            # a stray "=word" line would compile to \b\b, which matches at
+            # every word boundary and wraps the replacement around every
+            # word in the dictation
+            if not wrong:
+                log.warning("corrections.txt: ignoring line with no word to "
+                            "replace: %r", line)
+                continue
             # lambda repl: right-hand side is literal text, never a regex
             # backreference template (a bare "\1" or "\t" would otherwise
             # corrupt output or raise re.error and break every dictation)
-            text = re.sub(rf"\b{re.escape(wrong.strip())}\b",
+            text = re.sub(rf"\b{re.escape(wrong)}\b",
                           lambda m: replacement, text, flags=re.IGNORECASE)
+    except FileNotFoundError:
+        pass  # no corrections file yet is the normal case
     except OSError:
-        pass
+        log.warning("corrections.txt unreadable; corrections skipped this job",
+                    exc_info=True)
     # Whisper itself puts a period on short fragments ("Outdoor camping."),
     # which reads wrong in search boxes and titles. Strip it when the text
     # is short and has no other sentence punctuation; real sentences keep it.

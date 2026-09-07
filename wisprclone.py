@@ -23,6 +23,10 @@ BASE = Path(__file__).parent
 
 IDLE, RECORDING_PTT, RECORDING_TOGGLE = range(3)
 VK = {"x1": 0x05, "x2": 0x06}
+# How often to retry a stale mic stream. Long enough that a genuinely absent
+# device isn't re-initializing PortAudio every tick, short enough that a mic
+# plugged back in comes up without the user reaching for the tray.
+MIC_RECOVERY_INTERVAL_S = 30.0
 
 log = logging.getLogger("wisprclone")
 
@@ -259,7 +263,7 @@ def main():
 
     user32 = ctypes.windll.user32
     DESKTOP_READOBJECTS = 0x0001
-    mic_recovery_tried = False
+    last_mic_recovery = 0.0
     was_recording = False
     idle_close_s = cfg["audio"]["idle_close_s"]
     last_activity = time.monotonic()
@@ -275,7 +279,7 @@ def main():
         return False
 
     def tick():
-        nonlocal mic_recovery_tried, was_recording, last_menu_update, last_activity
+        nonlocal last_mic_recovery, was_recording, last_menu_update, last_activity
         if status.quit_requested:
             teardown()
             return
@@ -317,16 +321,17 @@ def main():
             recorder.suspend()
 
         # Stream death: device removal doesn't raise, callbacks just stop.
+        # Retried on a timer, not a once-per-outage latch: a mic that stays
+        # dead while the user keeps trying never goes idle enough to reset
+        # a latch, so recovery would fire once and never again.
         if not recorder.suspended and time.monotonic() - recorder.last_block_ts > 2.0:
-            if not mic_recovery_tried:
-                mic_recovery_tried = True
+            if time.monotonic() - last_mic_recovery > MIC_RECOVERY_INTERVAL_S:
+                last_mic_recovery = time.monotonic()
                 log.warning("mic stream stale, attempting recovery")
                 try:
                     recorder.reopen()
                 except Exception:
                     log.exception("mic recovery failed")
-        else:
-            mic_recovery_tried = False
 
         if status.flash_error:
             status.flash_error = False

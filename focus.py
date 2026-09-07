@@ -25,6 +25,12 @@ def _gui_thread_info():
     return None
 
 
+# an HWND is pointer-sized; ctypes defaults to a 32-bit signed int. ui.py
+# happens to set this on the same globally cached function object, but this
+# module owns the call, so it declares its own return type.
+ctypes.windll.user32.GetForegroundWindow.restype = ctypes.c_void_p
+
+
 def foreground_window():
     return ctypes.windll.user32.GetForegroundWindow()
 
