@@ -3,6 +3,61 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-06 — Code review of the whole code-cleanup branch, and its fixes
+
+Ran a max-effort review over the full branch against main (10 commits, a
+2000-line diff): ten finder angles in parallel, then verification of every
+candidate before anything was reported. The refactor itself came back
+clean. Four angles independently diffed the moved code against pre-split
+transcribe.py and found it byte-identical apart from the three edits the
+2026-09-05 entry already discloses, and the re-export surface holds against
+all 33 gitignored scripts under analysis_tools/results/ as well as the
+tracked ones. Almost everything real was pre-existing code the split newly
+exposed rather than damage the split did.
+
+Fifteen findings survived. Four correctness bugs mattered: `Clipboard` is
+one instance reached by three threads (the transcriber, the thread a
+repaste click spawns, and pystray's for "Re-copy last") with no lock, so
+two overlapping pastes could save each other's text as the "prior"
+clipboard and hand back a stale dictation, or break the Ctrl+V chord into a
+literal "v"; a corrections.txt line with a blank left side compiled to
+`\b\b` and wrapped its replacement around every word of every dictation
+(reproduced live, though the real file has never had such a line);
+`Recorder.reopen()` could run concurrently from the tick thread and the
+tray's Reconnect mic through PortAudio's non-reentrant global
+_terminate/_initialize; and the mic-recovery latch only reset once the
+recorder went idle, so a dead mic the user kept retrying got exactly one
+automatic reopen and no more. Fixed in `9edb3f9`: a lock held across the
+whole clipboard save/write/paste/restore sequence, a guard plus warning on
+the blank correction key, a lock on reopen, and a 30s retry timer replacing
+the latch. Three smaller ones went in the same commit: focus.py now
+declares its own GetForegroundWindow restype instead of inheriting one ui.py
+happens to set on the same cached ctypes object, `_mark_transient()` moved
+into a `finally` so a failed write can't leave the user's own clipboard
+unmarked for Clipboard History, and an unreadable corrections/emphasis file
+now logs instead of being swallowed by a bare `except OSError: pass`.
+
+The doc and analysis-script findings landed first in `500a925`, since they
+touch nothing the running app uses: a Scope link in SETUP.md left pointing
+at docs/README.md by the docs/ move, CLAUDE.md's sounds/ bullet still
+naming an unqualified SETUP.md, foreground_window() missing from CLAUDE.md's
+focus.py bullet, a dangling `[[...]]` reference in this file, plus
+mine_ollama_parallel.py taking POLISH_PROMPT from transcribe.py (a full
+CUDA import for one string, now 19ms from polish.py) and two defects in the
+new mine_paragraph_breaks.py.
+
+One reported finding was deliberately not applied: deduplicating that
+script's `load_records()` against a sibling would pull transcribe.py, and
+therefore CUDA, into a pure-stdlib script - the exact cost being removed
+from mine_ollama_parallel.py in the same commit. Four other candidates were
+refuted on verification, including a suggestion to merge focus.py's UI
+Automation client with ui.py's, which would break COM's per-thread
+apartment rule since `Anchor` runs on its own thread.
+
+Live-tested before the code commit: a toggle dictation, a PTT dictation,
+and specifically the repaste path (right-clicking away from the text box so
+the paste has to be re-offered). All three clean.
+
 ## 2026-09-06 — Paragraph breaks for long dictations: investigated, dropped
 
 Asked whether long (1-2 minute) toggle-mode dictations could split into
