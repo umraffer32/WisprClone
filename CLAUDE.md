@@ -58,11 +58,12 @@ onboarding work unless explicitly asked.
   clear it out if it's not worth keeping unused.
 - `analysis_tools/` — `mine_vocab.py` / `mine_streaming.py` /
   `mine_merge_rule.py` / `mine_polish.py` / `mine_polish_3b.py` /
-  `mine_segment_polish.py` / `mine_ollama_parallel.py`: offline analysis
-  scripts over the logs above, run by hand, summary output only. Each
-  finds the repo root's `wisprclone.log`/`config.toml` via
-  `BASE = Path(__file__).parent.parent`; the three that import
-  `transcribe.py` add the repo root to `sys.path` first.
+  `mine_segment_polish.py` / `mine_ollama_parallel.py` /
+  `mine_paragraph_breaks.py`: offline analysis scripts over the logs
+  above, run by hand, summary output only. Each finds the repo root's
+  `wisprclone.log`/`config.toml` via `BASE = Path(__file__).parent.parent`;
+  the three that import `transcribe.py` add the repo root to `sys.path`
+  first.
 - `analysis_tools/results/` — `README.md` is the analysis log: one entry
   per offline test (newest first) with the full tables, where LOG.md keeps
   only the decision. Each dated subfolder holds that day's data and
