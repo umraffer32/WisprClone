@@ -3,6 +3,46 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-06 — Paragraph breaks for long dictations: investigated, dropped
+
+Asked whether long (1-2 minute) toggle-mode dictations could split into
+paragraphs instead of pasting as one flat block, driven by pause length
+between speech segments. Mined vad_shadow.log's finest VAD bucket (300ms
+merge threshold) across the 35 toggle dictations at audio_s >= 45s: 275
+measured gaps, median 0.64s, p90 1.57s, p95 2.49s. Every threshold tested
+from 1.0s to 3.0s came back with a median of zero qualifying breaks per
+dictation, and even the most permissive (1.0s) only fired at all in 49% of
+those dictations. A spot-check of the longest clips found no visible
+difference between an outlier pause and an ordinary breath gap. Tables in
+analysis_tools/results/README.md; script is
+analysis_tools/mine_paragraph_breaks.py.
+
+Also looked into how Wispr Flow does this, since it's the product this app
+is modeled against. Their own disclosed approach (a Baseten case study
+quoting co-founder Sahaj Garg) runs a fine-tuned Llama model over the
+dictated text as a real-time reformatting pass, under 700ms end-to-end -
+not a pause-timing rule - layered under an explicit spoken-command system
+("new line") and a user-adjustable "Auto Cleanup" aggressiveness slider.
+Nothing public confirms whether pause length factors into that LLM's
+decisions at all.
+
+That ruled out the pause-threshold approach on the data alone, leaving a
+narrower LLM pass (paragraph breaks only, nothing else) as the remaining
+option. Worked through the latency instead of building it: a
+straightforward version, hand the model the transcript and get the same
+text back with breaks inserted, still generates the entire transcript
+token by token, the same generation cost as the full polish pass already
+dropped on 2026-09-01 for not earning its latency. It would also always
+run on the longest inputs in the whole pipeline, since it's gated to long
+dictations specifically, so per-call latency could end up worse than
+polish's ever did. The only design that would actually cost less, having
+the model return break positions only and splicing them in locally, was
+never built or tested - the idea was dropped once it became a
+full-rewrite-or-nothing call for latency that wasn't wanted, rather than
+sinking build time into an untested marker-only version. No app code
+touched; analysis merged from a throwaway `paragraph-breaks` branch
+(mining commit `9da6576`) into `code-cleanup` at `4ea0e03`.
+
 ## 2026-09-05 — transcribe.py split into cleanup/polish/clipboard/focus (branch: transcribe-split)
 
 transcribe.py had grown to 1144 lines covering five distinct jobs. Asked for
