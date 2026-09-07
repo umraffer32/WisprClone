@@ -94,9 +94,22 @@ polish's ever did. The only design that would actually cost less, having
 the model return break positions only and splicing them in locally, was
 never built or tested - the idea was dropped once it became a
 full-rewrite-or-nothing call for latency that wasn't wanted, rather than
-sinking build time into an untested marker-only version. No app code
-touched; analysis merged from a throwaway `paragraph-breaks` branch
-(mining commit `9da6576`) into `code-cleanup` at `4ea0e03`.
+sinking build time into an untested marker-only version.
+
+Reopened later the same day as a prompt-change question (could a rule in
+POLISH_PROMPT just do it?) and closed on two facts the mining pass hadn't
+covered. Scale: only 43 of 2,156 logged jobs run 45s or longer, about 2%,
+and a prompt rule is inert anyway while polish is off - turning it back on
+at the current 8s gate would tax 888 of those jobs (41%) to fix the 43.
+Destination: those long dictations mostly land in Claude Code's compose
+box, which renders a flat block fine and gets read back in the transcript
+rather than edited as prose, so the defect is cosmetic where it actually
+occurs. Noted while working through it, in case polish ever returns with
+structural output: `is_terminal()` gates continuation stitching only, not
+the paste itself, so a newline in pasted text would execute in a terminal.
+
+No app code touched; analysis merged from a throwaway `paragraph-breaks`
+branch (mining commit `9da6576`) into `code-cleanup` at `4ea0e03`.
 
 ## 2026-09-05 — transcribe.py split into cleanup/polish/clipboard/focus (branch: transcribe-split)
 
