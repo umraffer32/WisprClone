@@ -82,18 +82,36 @@ class Status:
         self.last_text = ""
         self.flash_error = False  # UI tick consumes this
         self.result_until = 0.0   # pill offers click-to-repaste until then
-        self.words_today = 0
         self.words_total = 0
+        self._words_today = 0
         self._word_day = datetime.now().date()
+
+    def _roll_day(self):
+        """Zero the daily count when the date has changed. Read as well as
+        write goes through this: the app normally sits idle across midnight,
+        so checking only on write leaves yesterday's count on the tray."""
+        today = datetime.now().date()
+        if today != self._word_day:
+            self._word_day = today
+            self._words_today = 0
+
+    @property
+    def words_today(self):
+        with self._lock:
+            self._roll_day()
+            return self._words_today
+
+    @words_today.setter
+    def words_today(self, n):
+        with self._lock:
+            self._word_day = datetime.now().date()
+            self._words_today = n
 
     def add_words(self, text):
         with self._lock:
-            today = datetime.now().date()
-            if today != self._word_day:
-                self._word_day = today
-                self.words_today = 0
+            self._roll_day()
             n = len(text.split())
-            self.words_today += n
+            self._words_today += n
             self.words_total += n
 
     def inc_transcribing(self):

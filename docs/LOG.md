@@ -3,6 +3,22 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-09 — The tray word count rolls over at midnight on its own
+
+The tray read "97 words today" on a morning with no dictations. `add_words()`
+checked the date and zeroed the daily count, but only on the way in, so the
+check ran only when a dictation landed. The app sits idle across midnight
+every night, which is exactly when nothing calls it. The stale count then
+survived until the next restart reseeded from history.log.
+
+`words_today` is a property now. The date check runs on read as well as on
+write, so the tooltip and the tray menu, both already rebuilt about once a
+second, zero themselves at midnight with no dictation and no restart.
+
+Confirmed live for the read path: after a restart the tray showed 65, which
+matches the one dictation history.log holds for the day. The rollover itself
+can only be watched at midnight.
+
 ## 2026-09-07 — The pill's repaste gets the same leading-space rule
 
 The click-to-repaste offer always pasted `" " + text`, so every repaste

@@ -7,6 +7,19 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-09 — Tray word count kept yesterday's total
+
+Symptom: the tray menu and tooltip claimed 97 words for the day on a morning
+with no dictations at all; a restart dropped it to zero. Root cause: the
+day-rollover check lived inside `Status.add_words()` in transcribe.py, so it
+ran only when a dictation landed. Crossing midnight idle, which is the normal
+case, left `words_today` holding yesterday's number, and only a restart's
+`_load_word_counts()` reseed from history.log cleared it. Fix: `words_today`
+became a property whose getter runs the same date check, so the tray's own
+once-a-second refresh corrects the number. Status: fixed; read path confirmed
+live, the midnight rollover is unobserved until it happens. See LOG.md
+2026-09-09.
+
 ## 2026-09-07 — Click-to-repaste inserted a leading space
 
 Symptom: clicking the pill to repaste a dictation that missed its target
