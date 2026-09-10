@@ -17,7 +17,15 @@ onboarding work unless explicitly asked.
 ## Files
 
 - `wisprclone.py` — entry point: single-instance mutex, StateMachine, input
-  hooks, tk main loop (`tick()` every 33ms), teardown and tray-Restart relaunch.
+  hooks, tk main loop (`tick()` every 33ms), teardown, and `relaunch()`,
+  shared by tray-Restart and the driver watchdog. That watchdog is a 2s
+  check in `tick()` comparing `driver_version()` against a baseline taken
+  once the model is on CUDA. An NVIDIA driver install swapping under the
+  running process kills its CUDA context, and the next ctranslate2 call
+  then hits an `abort()` no Python handler can catch, so on a version
+  change the app waits for idle, relaunches, and `os._exit(0)`s — never
+  `teardown()`, which would GC the model and free GPU memory on the dead
+  context, aborting instead of exiting.
 - `audio.py` — `Recorder`: sounddevice callback, 250ms pre-roll, buffers
   blocks while recording, enqueues `{"blocks", "mode"}` jobs on stop and a
   `{"warm": True}` GPU-warm sentinel on start; also mutes the start of the
@@ -31,7 +39,10 @@ onboarding work unless explicitly asked.
   mode-agnostic; prompt and output guards in `polish.py`), continuation
   stitching and the paste through `clipboard.py`, the landed check that
   offers click-to-repaste, history.log and job-line logging. Also
-  `Status`, the state shared with the recorder and UI.
+  `Status`, the state shared with the recorder and UI, and
+  `driver_version()`, which reads the NVIDIA driver version through NVML
+  (never a CUDA context, so it can't trip the abort it exists to avoid)
+  and returns `None` on any failure — wisprclone.py's watchdog polls it.
 - `cleanup.py` — text after whisper: `join_segments()` (lowercases a capital
   the batched pipeline puts at a mid-sentence chunk cut) and the regex
   `clean_text()` (fillers, stutters, runaway repeats, leading "and",
@@ -94,6 +105,10 @@ onboarding work unless explicitly asked.
   silently skips elevated Startup-folder shortcuts.
 - To restart after code changes: tray icon → Restart, or
   `Start-ScheduledTask -TaskName WisprClone` after killing the old process.
+- The app also relaunches itself, unprompted, when `tick()`'s driver
+  watchdog sees the NVIDIA driver version change while it's idle. A pid
+  that changed on its own with a `nvidia driver changed` line in the log is
+  that, not a crash.
 - Never launch bare `pythonw.exe wisprclone.py` — it skips the venv wiring
   and dies with ModuleNotFoundError. The launcher is
   `.venv\Scripts\WisprClone.exe` with `wisprclone.py` as the argument and the

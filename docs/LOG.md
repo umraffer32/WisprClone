@@ -3,6 +3,49 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-09 — A driver install killed the app; a version watchdog now beats it
+
+WisprClone vanished mid-session with no traceback and no log line. The app
+had autostarted after a Windows Update reboot at 19:34:49 and logged
+`model ready on cuda` at 19:35:41. An NVIDIA driver install from the NVIDIA
+app swapped `nvlddmkm` under the running process at 19:43:24, which
+invalidates every CUDA context that process holds. Nothing touched the GPU
+for the next eight minutes, so the app looked fine. Holding push-to-talk at
+19:51:29 enqueued a GPU warm job, the first CUDA call on the dead context,
+and ctranslate2 aborted on a worker thread that has no handler for it.
+
+This is the 2026-08-31 crash again, same mechanism, and that incident left
+only an operational note to restart after a driver update. That note is a
+human procedure and it failed the first time a real driver update arrived.
+`abort()` is not a Python exception, so the `except Exception` already
+sitting in `_warm_gpu()` cannot catch it and no amount of handler work
+will. The only fix is to never make the call.
+
+`driver_version()` reads the installed driver through NVML, which never
+touches a CUDA context, so it can be polled safely on a context that is
+already dead. `tick()` compares it against a baseline every 2s, and on a
+change waits for idle, relaunches, and `os._exit(0)`s. The hard exit is
+load-bearing: a normal shutdown garbage-collects the WhisperModel, and
+ctranslate2's destructor frees GPU memory on the dead context, which is the
+`cuMemFreeAsync` returning 999 that August's dump showed. That would abort
+on the way out instead of exiting. The tray-Restart path and this one now
+share one `relaunch()`.
+
+Verified live rather than by reading. A temporary one-shot hook made
+`driver_version()` report a bogus version once: the app logged
+`nvidia driver changed 616.92 -> 0.00, relaunching`, and the replacement was
+up 758ms later with the model back on CUDA 2.5s after that. The new process
+is elevated, so dictation still reaches elevated windows. NVML costs 2.3ms
+per read, measured over 20 runs.
+
+Idle-gating is a deliberate limit, not an oversight. A swap landing while a
+dictation is in flight still kills the process, because the re-warm loop
+fires every 2s during a recording and can win the race against a 2s poll.
+Covering that needs a CPU-fallback flag and per-call version checks, and
+even then a swap inside the few hundred ms of a live CUDA call still wins.
+Both real incidents were the idle case, so it stays uncovered until one
+isn't.
+
 ## 2026-09-09 — The tray word count rolls over at midnight on its own
 
 The tray read "97 words today" on a morning with no dictations. `add_words()`

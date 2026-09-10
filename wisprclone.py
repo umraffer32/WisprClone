@@ -27,6 +27,10 @@ VK = {"x1": 0x05, "x2": 0x06}
 # device isn't re-initializing PortAudio every tick, short enough that a mic
 # plugged back in comes up without the user reaching for the tray.
 MIC_RECOVERY_INTERVAL_S = 30.0
+# How often to re-read the NVIDIA driver version. ~2ms through NVML, and the
+# gap between checks costs nothing, because the CUDA context is already dead
+# the moment the driver swaps. Noticing a second later changes nothing.
+DRIVER_CHECK_INTERVAL_S = 2.0
 
 log = logging.getLogger("wisprclone")
 
@@ -137,7 +141,7 @@ def main():
 
     from audio import Cue, Ducker, Recorder
     from focus import focused_text, is_terminal, needs_leading_space
-    from transcribe import Status, Transcriber
+    from transcribe import Status, Transcriber, driver_version
     from ui import Pill, make_tray
 
     status = Status()
@@ -278,6 +282,8 @@ def main():
     idle_close_s = cfg["audio"]["idle_close_s"]
     last_activity = time.monotonic()
     last_menu_update = 0.0
+    last_driver_check = 0.0
+    driver_baseline = None
 
     def input_desktop_ours():
         # Fails while the secure desktop (UAC) or lock screen holds input —
@@ -290,6 +296,7 @@ def main():
 
     def tick():
         nonlocal last_mic_recovery, was_recording, last_menu_update, last_activity
+        nonlocal last_driver_check, driver_baseline
         if status.quit_requested:
             teardown()
             return
@@ -342,6 +349,37 @@ def main():
                     recorder.reopen()
                 except Exception:
                     log.exception("mic recovery failed")
+
+        # Driver swap: an NVIDIA driver install under a running process
+        # invalidates every CUDA context that process holds, and the next
+        # call into ctranslate2 hits abort() (0xc0000409) on a thread with
+        # no handler - not a Python exception, so nothing here can catch it
+        # and the process just vanishes (2026-08-31, 2026-09-09). NVML reads
+        # the version without touching a context, which makes this the only
+        # way to notice the swap before making the call that would kill us.
+        if (status.device == "cuda"
+                and time.monotonic() - last_driver_check > DRIVER_CHECK_INTERVAL_S):
+            last_driver_check = time.monotonic()
+            version = driver_version()
+            if driver_baseline is None:
+                driver_baseline = version  # first read once the model is on CUDA
+            elif version and version != driver_baseline:
+                # Wait for idle. The context is already dead either way, but
+                # relaunching mid-dictation would lose it.
+                if sm.state == IDLE and status.transcribing == 0:
+                    log.warning("nvidia driver changed %s -> %s, relaunching",
+                                driver_baseline, version)
+                    relaunch()
+                    # os._exit, never teardown() or sys.exit: a normal shutdown
+                    # garbage-collects the WhisperModel, and ctranslate2's
+                    # destructor frees GPU memory on the dead context - the
+                    # cuMemFreeAsync returning 999 in the August crash dump -
+                    # which aborts instead of exiting. _exit skips every
+                    # destructor and atexit handler, which is the point.
+                    # Skipping teardown is safe only because we're idle:
+                    # nothing is recording, no paste is pending, and the
+                    # ducker has already restored volumes.
+                    os._exit(0)
 
         if status.flash_error:
             status.flash_error = False
@@ -414,14 +452,12 @@ def main():
             pass
         root.destroy()
 
-    log.info("started (ptt=%s, pid=%d)", cfg["hotkeys"]["ptt"], os.getpid())
-    tick()
-    root.mainloop()
-
-    if status.restart_requested:
+    def relaunch():
+        """Start the replacement instance. The mutex handle closes first,
+        because the new instance checks that same named mutex at startup."""
         import subprocess
         import win32api
-        win32api.CloseHandle(mutex)  # the new instance checks the mutex at startup
+        win32api.CloseHandle(mutex)
         launcher = Path(sys.prefix) / "Scripts" / "WisprClone.exe"
         log.info("restarting via %s", launcher)
         try:
@@ -431,6 +467,13 @@ def main():
             # refused - the scheduled task knows how to launch us either way
             log.exception("direct relaunch failed, delegating to scheduled task")
             subprocess.run(["schtasks", "/run", "/tn", "WisprClone"], check=False)
+
+    log.info("started (ptt=%s, pid=%d)", cfg["hotkeys"]["ptt"], os.getpid())
+    tick()
+    root.mainloop()
+
+    if status.restart_requested:
+        relaunch()
 
 
 def run_echo(cfg):

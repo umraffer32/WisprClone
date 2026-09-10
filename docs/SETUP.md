@@ -154,6 +154,8 @@ Once more, plainly: `[polish]` is currently `enabled = false` for me — off as 
 
 **The app won't start, or crashes right after you edit config.toml.** There's no defaults handling — every config key is read directly, so a missing or misspelled key throws a raw `KeyError` at startup. Diff your file against the one that shipped with the repo.
 
+**The app vanished after an NVIDIA driver update.** A driver install swaps the kernel driver under any running process and invalidates its CUDA context, and the crash that follows is an `abort()` inside ctranslate2, not a Python exception, so nothing gets logged. The app now watches the driver version through NVML and relaunches itself when it changes, but only once it's idle, so a driver update landing mid-dictation still takes the process with it. Check `wisprclone.log` for a `nvidia driver changed` line to tell a handled swap from a real crash.
+
 **Dictation doesn't reach one specific elevated app.** WisprClone itself probably isn't elevated. Recheck the RUNASADMIN compatibility flag on `.venv\Scripts\WisprClone.exe` specifically — not `pythonw.exe`, the actual copy you made.
 
 **It doesn't start automatically at login.** Run `Get-ScheduledTask -TaskName WisprClone` — it should show `Ready`. A plain Startup-folder shortcut gets silently skipped when its target is RUNASADMIN-flagged, which is exactly why this uses Task Scheduler instead.

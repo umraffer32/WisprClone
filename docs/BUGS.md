@@ -7,6 +7,54 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-09 — An NVIDIA driver install killed the app on the next PTT press
+
+Symptom: the app vanished with no traceback, no log line, and no error
+dialog. A few seconds of heavy lag on holding push-to-talk, then nothing.
+The tray icon was gone and dictation was dead until relaunched by hand;
+nothing brings it back on its own, since the scheduled task only fires at
+logon.
+
+Root cause: an NVIDIA driver install from the NVIDIA app swapped
+`nvlddmkm` under the running process at 19:43:24, eight minutes after the
+app had built its CUDA context (`model ready on cuda`, 19:35:41). A driver
+swap invalidates every CUDA context a running process holds. Nothing used
+the GPU in between, so the app looked healthy. The press at 19:51:29
+enqueued the `{"warm": True}` sentinel, the worker called `_warm_model()`,
+and that first CUDA call on the dead context aborted inside ctranslate2 on
+a thread with no handler. Confirmed from the Windows Application Error
+event: faulting process id `0x2750`, which is the pid 10064 the app had
+logged at startup; faulting module `ucrtbase.dll`; exception `0xc0000409`
+with WER parameter P9 = 7, `FAST_FAIL_FATAL_APP_EXIT`, a clean `abort()`
+rather than the memory corruption "stack buffer overrun" implies. The
+driver install window was confirmed independently from DriverStore
+timestamps and a UserPnp event re-adding the `nvlddmkm` service.
+
+Same mechanism as 2026-08-31 below, which was diagnosed but left with only
+an operational note to restart after a driver update. That note failed the
+first time a real driver update arrived, which is the reason this one got a
+code fix. Worth being explicit about why no handler helps: `abort()` is not
+a Python exception, so `_warm_gpu()`'s existing `except Exception` cannot
+see it and never could.
+
+Fix: `driver_version()` in transcribe.py reads the installed driver through
+NVML, which never touches a CUDA context and so is safe to call on one
+that is already dead. `tick()` polls it every 2s against a baseline taken
+once the model is on CUDA, and on a change waits for idle, calls the
+`relaunch()` now shared with tray-Restart, then `os._exit(0)`. The hard
+exit matters: a normal shutdown would GC the WhisperModel and free GPU
+memory on the dead context, the `cuMemFreeAsync` 999 that August's dump
+showed, aborting on the way out instead of exiting.
+
+Status: fixed and confirmed live. A temporary one-shot hook forced a bogus
+version once; the app logged `nvidia driver changed 616.92 -> 0.00,
+relaunching` and the replacement was up 758ms later, elevated, model back
+on CUDA. Known limit, deliberate: a swap landing while a dictation is in
+flight still kills the process, because the re-warm loop fires every 2s
+during a recording and can beat the 2s poll. Both incidents so far were the
+idle case, so that gap is left open rather than paid for with a
+CPU-fallback flag and per-call checks that still would not fully close it.
+
 ## 2026-09-09 — Tray word count kept yesterday's total
 
 Symptom: the tray menu and tooltip claimed 97 words for the day on a morning

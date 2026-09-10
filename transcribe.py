@@ -1,5 +1,6 @@
 """Model loading and the Transcriber worker thread: whisper, clean, polish, paste, log."""
 
+import ctypes
 import json
 import logging
 import os
@@ -182,6 +183,29 @@ def vad_shadow(audio, jobs):
 # STARTING a warm, and the last one's boost carries coverage ~2s past it.
 WARM_INTERVAL_S = 2.0
 WARM_BOUND_S = 15.0
+
+
+def driver_version():
+    """The installed NVIDIA driver version, or None if it can't be read.
+
+    Read through NVML, which never touches a CUDA context - the whole point,
+    because the call that would otherwise reveal a stale context is the call
+    that kills the process. Init and shut down on every call, because a held
+    handle can answer from a value cached before a driver swap, which is the
+    swap this exists to catch. The full cycle measures ~2.3ms."""
+    try:
+        nvml = ctypes.CDLL("nvml.dll")
+        if nvml.nvmlInit_v2() != 0:
+            return None
+        try:
+            buf = ctypes.create_string_buffer(80)
+            if nvml.nvmlSystemGetDriverVersion(buf, len(buf)) != 0:
+                return None
+            return buf.value.decode()
+        finally:
+            nvml.nvmlShutdown()
+    except Exception:
+        return None  # no NVIDIA GPU, no NVML, or a broken one - all mean "can't tell"
 
 
 def _warm_model(model):
