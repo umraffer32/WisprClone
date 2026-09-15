@@ -52,7 +52,12 @@ onboarding work unless explicitly asked.
   without paying transcribe.py's faster-whisper/CUDA startup.
 - `clipboard.py` — `Clipboard`: saves the prior clipboard, writes the text,
   sends Ctrl+V, puts the prior contents back, and marks everything it
-  writes as excluded from Clipboard History and cloud sync.
+  writes as excluded from Clipboard History and cloud sync. The prior-
+  clipboard save is bounded by `clipboard_read_timeout_ms`
+  (`[paste]` in config.toml): past it, a hung clipboard owner (a frozen
+  browser tab, see BUGS.md 2026-09-14) gets skipped rather than blocking
+  the paste indefinitely, and the dictated text is written directly
+  instead, leaving the prior clipboard contents un-restored.
 - `focus.py` — where a paste would land, via Win32 and UI Automation:
   `foreground_window()`, `is_terminal()`, `caret_visible()`,
   `focused_editable()`, `focused_text()`, `paste_blocked()`, plus

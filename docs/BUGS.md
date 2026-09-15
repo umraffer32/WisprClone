@@ -7,6 +7,52 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-14 — A hung browser tab froze a paste for 42.86s
+
+Symptom: dictating into a Firefox tab that had gone "Not Responding" (a
+heavy Google AI Mode results page) froze the paste. `wisprclone.log` showed
+`paste=42.86s` on that job, with recording and whisper both fast (audio
+4.9s, whisper 0.24s) — the entire delay was inside `clipboard.py`'s
+`Clipboard.paste()`.
+
+Root cause: `_paste()` calls `win32clipboard.GetClipboardData()` to save
+whatever's on the clipboard before overwriting it with the dictated text,
+so it can be restored afterward. If the current clipboard owner uses
+delayed rendering (browsers commonly do), `GetClipboardData()` sends that
+owner's window a synchronous `WM_RENDERFORMAT` message and doesn't return
+until the owner services it. Firefox owned the clipboard and was hung, so
+the call blocked for as long as Firefox stayed unresponsive. Nothing in
+the paste path had a timeout for this — `clipboard_retries` /
+`clipboard_retry_ms` only bound the initial `OpenClipboard()` call
+(~100ms), not this read.
+
+A second hang point exists on the same mechanism: the normal write path's
+`EmptyClipboard()` call also sends a synchronous message
+(`WM_DESTROYCLIPBOARD`) to the current owner and would have blocked the
+same way once the timeout fix in place shifted the failure there instead.
+
+Fix: the prior-clipboard read now runs on a throwaway thread, bounded by a
+new `clipboard_read_timeout_ms` (1000ms, `[paste]` in config.toml). Past
+that, WisprClone logs `clipboard restore skipped: read timed out after Ns`,
+gives up on restoring the prior clipboard, and writes the dictated text
+directly via `SetClipboardData` (skipping `EmptyClipboard`, avoiding the
+second hang point) rather than skipping the paste. Verified against a
+synthetic hung clipboard owner (a real window whose `WM_RENDERFORMAT`
+handler sleeps instead of responding): unpatched, `paste()` blocked
+20.34s against a 20s-hung owner; patched, it returned in 1.30s against a
+25s-hung owner and still delivered the text. The normal (no hung owner)
+path is unaffected — prior clipboard still saved and restored exactly as
+before. On the timed-out path only, any other formats the hung owner had
+registered (rich text, an image) are left behind alongside the dictated
+plain text, since `EmptyClipboard` is skipped — accepted, since a paste
+target reading plain text is unaffected and this only happens in the rare
+timed-out case.
+
+Status: fixed (verified against a synthetic repro, not a real hang in
+normal use — dictating into Google's search/AI-mode bars has happened
+many times before with no issue, so this is being treated as a one-off).
+Revisit only if it shows up again.
+
 ## 2026-09-09 — An NVIDIA driver install killed the app on the next PTT press
 
 Symptom: the app vanished with no traceback, no log line, and no error

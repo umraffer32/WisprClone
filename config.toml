@@ -62,6 +62,11 @@ gpu_fail_latch = 3
 restore_delay_ms = 300
 clipboard_retries = 5
 clipboard_retry_ms = 20
+clipboard_read_timeout_ms = 1000  # a hung clipboard owner (e.g. a frozen
+                                  # browser tab) can block the read of the
+                                  # prior clipboard for as long as it stays
+                                  # hung (2026-09-14, 42.86s). Past this, give
+                                  # up on restoring it and paste anyway.
 result_display_s = 10  # how long the pill offers a click-to-repaste checkmark
 continuation_gap_s = 4  # fallback only: the primary path reads the focused
                        # field via UI Automation and stitches a period onto

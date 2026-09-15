@@ -41,6 +41,7 @@ class Clipboard:
         self.retries = p["clipboard_retries"]
         self.retry_s = p["clipboard_retry_ms"] / 1000
         self.restore_delay = p["restore_delay_ms"] / 1000
+        self.read_timeout = p["clipboard_read_timeout_ms"] / 1000
         self.kb = Controller()
         # Three threads reach this one instance: the Transcriber worker, the
         # thread a repaste click spawns, and pystray's for "Re-copy last".
@@ -83,22 +84,39 @@ class Clipboard:
         self._replace_clipboard(
             lambda: win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT))
 
-    def paste(self, text):
-        with self._lock:
-            return self._paste(text)
+    def _write_text_direct(self, text):
+        """Same job as _write_text, but skips EmptyClipboard - used only
+        after _paste has already given up on the prior owner (see
+        _read_prior_clipboard's timeout). EmptyClipboard synchronously
+        notifies the CURRENT owner via WM_DESTROYCLIPBOARD before handing
+        us the clipboard, which blocks exactly like the abandoned read did.
+        SetClipboardData just overwrites the format directly, so a reader
+        asking for CF_UNICODETEXT gets our text without waiting on that
+        owner at all. Leaves whatever other formats it had registered."""
+        win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text)
+        self._mark_transient()
 
-    def _paste(self, text):
+    def _read_prior_clipboard(self, result):
+        """Runs on its own thread, called by _paste with a bounded join().
+        GetClipboardData blocks for as long as the clipboard owner takes to
+        service WM_RENDERFORMAT for a delayed-rendered format - a hung app
+        (Firefox gone Not Responding, 2026-09-14) can block it for as long
+        as it stays hung. Win32 clipboard calls are thread-affined (only
+        the thread that opened the clipboard may read or close it), so
+        _paste can't just time out a call it made itself - it has to hand
+        the read to a thread it's willing to abandon. If _paste gives up
+        waiting, this thread is left to finish (or never does); its
+        CloseClipboard is then a no-op at best, since _paste's own reopen
+        to write the dictated text may already have closed that session."""
         if not self._open():
-            log.error("clipboard busy, dropping paste: %r", text[:80])
-            return None
-        saved = {}
-        restorable = False
+            return
         try:
             formats, f = [], 0
             while (f := win32clipboard.EnumClipboardFormats(f)):
                 formats.append(f)
             has_text = any(fmt in _TEXT_FORMATS for fmt in formats)
             restorable = not (has_text and not all(fmt in _SAFE_FORMATS for fmt in formats))
+            saved = {}
             if restorable:
                 saved = {fmt: win32clipboard.GetClipboardData(fmt)
                          for fmt in formats if fmt in _SAFE_FORMATS}
@@ -107,7 +125,40 @@ class Clipboard:
                     # file) - leave the dictated text rather than wipe
                     # the clipboard to empty
                     restorable = False
-            self._write_text(text)
+            result["saved"], result["restorable"], result["done"] = saved, restorable, True
+        finally:
+            try:
+                win32clipboard.CloseClipboard()
+            except pywintypes.error:
+                pass  # this session may already be gone - see docstring
+
+    def paste(self, text):
+        with self._lock:
+            return self._paste(text)
+
+    def _paste(self, text):
+        read = {}
+        reader = threading.Thread(target=self._read_prior_clipboard, args=(read,), daemon=True)
+        reader.start()
+        reader.join(self.read_timeout)
+        timed_out = not read.get("done")
+        if timed_out:
+            log.warning("clipboard restore skipped: read timed out after %gs", self.read_timeout)
+            saved, restorable = {}, False
+        else:
+            saved, restorable = read["saved"], read["restorable"]
+
+        if not self._open():
+            log.error("clipboard busy, dropping paste: %r", text[:80])
+            return None
+        try:
+            # On the timed-out path the prior owner just proved unresponsive -
+            # EmptyClipboard would notify it via WM_DESTROYCLIPBOARD and hang
+            # the same way, so overwrite the format directly instead.
+            if timed_out:
+                self._write_text_direct(text)
+            else:
+                self._write_text(text)
         finally:
             win32clipboard.CloseClipboard()
 

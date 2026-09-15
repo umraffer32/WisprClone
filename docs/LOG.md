@@ -3,6 +3,35 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-14 — A hung clipboard owner could freeze a paste indefinitely
+
+Dictating into a Firefox tab that had gone "Not Responding" froze a paste
+for 42.86s (`wisprclone.log`: `paste=42.86s` on an otherwise-fast job).
+`Clipboard._paste()` reads the prior clipboard contents before overwriting
+them, so they can be restored after the paste; that read blocks
+synchronously on the clipboard owner if it uses delayed rendering, which
+Firefox does, and a hung owner blocks it for as long as it stays hung.
+Nothing in the paste path had a timeout for this case.
+
+The read now runs on a throwaway thread bounded by a new
+`clipboard_read_timeout_ms` (1000ms). Past that, WisprClone gives up on
+restoring the prior clipboard and writes the dictated text directly
+(skipping `EmptyClipboard`, which turned out to have the same blocking
+mechanism and would have just moved the hang) rather than skipping the
+paste — the user's spoken dictation landing matters more than preserving
+whatever was on the clipboard before it, and this only costs anything in
+the rare case the read actually times out.
+
+Verified against a synthetic hung clipboard owner (a real window whose
+`WM_RENDERFORMAT` handler sleeps instead of responding) rather than just
+by inspection: unpatched, `paste()` blocked 20.34s against a 20s-hung
+owner; patched, it returned in 1.30s against a 25s-hung owner and still
+delivered the text, while the normal restore path was confirmed
+unaffected. Not caught again in real use since (dictating into Google's
+search/AI-mode bars has happened many times before with no issue), so
+this is treated as a one-off rather than something worth further live
+testing — revisit only if it recurs.
+
 ## 2026-09-09 — A driver install killed the app; a version watchdog now beats it
 
 WisprClone vanished mid-session with no traceback and no log line. The app
