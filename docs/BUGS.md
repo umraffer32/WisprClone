@@ -7,6 +7,39 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-15/16 — USB mic (JOUNIVO JV601) randomly went muted on its own
+
+Not caused by WisprClone; tracked here since it's dictation-adjacent. The
+mic muted itself intermittently and unpredictably, with no hotkey press and
+no manual toggle.
+
+Investigation: Windows Settings > Sound > Communications tab was already
+set to change the default ducking/muting behavior; switching that to "Do
+nothing" did not fix it, the mic muted itself again afterward. Checked USB
+power management for the mic's USB interface
+(`USB\VID_5679&PID_1002&MI_02`, WMI class `root\wmi:MSPower_DeviceEnable`)
+and found `Enable=True`. The Windows audio event log showed "MMDevAPI:
+Audio device state changed" bursts lining up exactly with lock/unlock and
+sleep/wake events, pointing at the device being USB-suspended on idle and
+re-enumerating muted on wake.
+
+Fix: set `Enable=$false` on that WMI instance via an elevated PowerShell
+session (a regular non-admin PowerShell session got Access Denied; had to
+run it in PowerShell ISE as Administrator). Confirmed the flag read back as
+`False` on 2026-09-16.
+
+Secondary suspect not ruled out: `logitechg_discord.exe` (Logitech G HUB's
+Discord integration) is running on the machine and has known bugs that
+force a mic mute in sync with Discord state, though those reports are
+mostly from people on Logitech-brand headsets rather than a generic USB
+mic, so it's lower-probability than the USB power management cause.
+
+Status: fix applied, awaiting confirmation over time that the muting
+doesn't recur. If it comes back: re-check that `Enable` is still `False`
+for that device (a driver update or a different USB port creates a new
+`InstanceId` and resets this), then look at disabling G HUB's Discord
+integration.
+
 ## 2026-09-14 — A hung browser tab froze a paste for 42.86s
 
 Symptom: dictating into a Firefox tab that had gone "Not Responding" (a
