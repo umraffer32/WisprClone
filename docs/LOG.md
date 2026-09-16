@@ -3,6 +3,22 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-16 — Logged the USB mic auto-mute bug (not a WisprClone issue)
+
+The JOUNIVO JV601 USB mic was going muted on its own, intermittently, with
+no hotkey press and no manual toggle — not caused by WisprClone, but
+dictation-adjacent so it's tracked in BUGS.md rather than left undocumented.
+Windows' Communications-tab ducking setting wasn't the cause (already
+switched to "Do nothing," muted again anyway). USB power management on the
+mic's USB interface was: Windows was suspending it on idle and it was
+re-enumerating muted on wake, confirmed by audio-event-log bursts lining up
+with lock/unlock and sleep/wake times. Fixed by disabling
+`MSPower_DeviceEnable` for that device via an elevated PowerShell session.
+Logitech G HUB's Discord integration stays an open secondary suspect if the
+mute recurs after confirming the power-management flag is still off.
+
+No code change; this is a doc-only commit.
+
 ## 2026-09-14 — A hung clipboard owner could freeze a paste indefinitely
 
 Dictating into a Firefox tab that had gone "Not Responding" froze a paste
