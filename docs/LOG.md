@@ -3,6 +3,35 @@
 Newest first. Decision-level: why things changed and what testing showed.
 Diff-level detail lives in git history.
 
+## 2026-09-18 — USB mic auto-mute recurred; ruled out both prior suspects
+
+Follow-up to 09-16 below. The mic muted itself again despite the fix. This
+time the actual state was checked before unmuting: Windows Sound settings
+showed the recording device's volume at 0 with the mute cross-mark set — a
+software-level mute on the endpoint, not the USB power-management dropout
+from before, and not the physical mute button (it stayed green throughout).
+
+Both prior suspects were ruled out this round: the USB power-management
+flag was rechecked and was still `False` on the same device instance, so it
+was never reset; and the Discord desktop app hasn't run on this machine in
+months, so there was no Discord state for a sync bug to fire from.
+
+New lead, and a correction: the background process involved
+(`logitechg_discord.exe`) isn't G HUB as first assumed — its install path
+showed it's Logitech Gaming Software's Arx Control Discord applet, spawned
+automatically by `LCore.exe` (kept running for the keyboard's CPU/RAM LCD
+display) with no separate startup entry to disable in isolation. Arx
+Control itself is unused.
+
+Tried disabling it via LGS's own Arx Control settings (unchecked Mobile
+Service "Enable"), then restarted LGS to test — the applet relaunched
+anyway under a new PID, so that toggle doesn't actually stop it from
+loading. The remaining option, moving the applet's folder out from under
+Program Files so LCore can't find it, was judged not worth it for an
+intermittent issue that's obvious and quick to fix by hand. Decision: live
+with it, manually unmute via Windows Sound settings when it happens. See
+BUGS.md for the full investigation; this entry is doc-only, no code change.
+
 ## 2026-09-16 — Logged the USB mic auto-mute bug (not a WisprClone issue)
 
 The JOUNIVO JV601 USB mic was going muted on its own, intermittently, with

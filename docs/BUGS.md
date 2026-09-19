@@ -7,6 +7,58 @@ pasted wrong text, or had to be diagnosed and worked around belongs here.
 Newest first, same as LOG.md. Each entry covers symptom, root cause, fix,
 and status.
 
+## 2026-09-18 — JOUNIVO mic mute recurred; the 09-15/16 fix wasn't the cause
+
+Follow-up to the entry below. The mic muted itself again with no manual
+toggle. This time confirmed what was actually muted before unmuting it:
+Windows Sound settings showed the recording device's volume driven to 0
+with the mute cross-mark set, i.e. a software-level mute on the audio
+endpoint, not a device dropout. The mic's own physical mute button (it has
+one, with a red/green LED) stayed green throughout, ruling out the
+hardware button and anything spoofing its HID state.
+
+Ruled out the two suspects from the prior entry:
+
+- USB power management: re-checked `Enable` on the same WMI instance
+  (`USB\VID_5679&PID_1002&MI_02\7&46f938e&0&0002_0`) — still `False`, same
+  `InstanceId` as when it was set on 2026-09-16, so it was never reset and
+  was not the cause of this recurrence.
+- Discord state sync: the Discord desktop app hasn't been run on this
+  machine in months, so there was no Discord state to sync from.
+
+New lead: `logitechg_discord.exe` (PID confirmed running, path
+`C:\Program Files\Logitech Gaming Software\ArxApplets\Discord\`) is not
+G HUB as the prior entry assumed — it's **Logitech Gaming Software (LGS)**,
+the older suite, specifically its **Arx Control** Discord applet (mirrors
+Discord mute/status to a phone/tablet companion app). It runs as a
+background process independent of whether Discord.exe is open, spawned
+automatically by `LCore.exe` (the main LGS process, kept running
+deliberately for the keyboard's CPU/RAM LCD display) as part of its normal
+applet loading. No separate scheduled task, service, or registry Run entry
+exists for the Arx applet alone — it's LCore's own applet loader, so it
+can't be disabled by killing or blocking a standalone startup entry without
+risking the LCD applet too. Arx Control itself is unused and unconfigured;
+the LCD display is the only LGS feature actually wanted.
+
+Tried disabling it through LGS's own UI: Settings > Arx Control >
+unchecked Mobile Service "Enable", then restarted LGS. `logitechg_discord.exe`
+came back anyway under a fresh PID, started in step with `LCore.exe`'s
+restart — that checkbox only gates the phone/tablet pairing service, not
+whether the applet process itself loads. The remaining option (moving or
+renaming the `ArxApplets\Discord` folder under Program Files so `LCore`
+can't find it) would work but means hand-editing an installed app's files
+for a suspect that was never actually caught in the act.
+
+Status: CLOSED, not fixed — declined as not worth the effort for an
+intermittent, easily-noticed annoyance (dictation just doesn't go through,
+immediately obvious, fixed in a few seconds by unmuting). Living with it:
+manually unmute via Windows Sound settings when it happens. Root cause
+still unconfirmed; Arx Control's Discord applet remains circumstantial
+(present, running regardless of Discord usage, a plausible mechanism for a
+software-level mute) but was never caught mid-mute to prove it. Revisit
+only if it starts happening often enough to be worth the Program Files
+edit, or if a future LGS/Windows update changes the picture.
+
 ## 2026-09-15/16 — USB mic (JOUNIVO JV601) randomly went muted on its own
 
 Not caused by WisprClone; tracked here since it's dictation-adjacent. The
